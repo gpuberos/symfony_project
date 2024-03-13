@@ -1,20 +1,15 @@
 {% extends 'base.html.twig' %}
 
-{% block title %}Hello RecipeController!{% endblock %}
+{% block title "Toutes les recettes" %}   
 
 {% block body %}
-<style>
-    .example-wrapper { margin: 1em auto; max-width: 800px; width: 95%; font: 18px/1.5 sans-serif; }
-    .example-wrapper code { background: #F5F5F5; padding: 2px 6px; }
-</style>
+    <p>Lorem ipsum dolor sit, amet consectetur adipisicing elit. Est alias cumque voluptas ad dolores possimus dignissimos excepturi, et quam assumenda dolor consectetur saepe atque beatae esse praesentium eaque mollitia maxime?</p>
 
-<div class="example-wrapper">
-    <h1>Hello {{ controller_name }}! ✅</h1>
+{{ dump(app.request()) }}
 
-    This friendly message is coming from:
+
+
     <ul>
-        <li>Your controller at <code>C:/wamp64/www/tuto_symfony/src/Controller/RecipeController.php</code></li>
-        <li>Your template at <code>C:/wamp64/www/tuto_symfony/templates/recipe/index.html.twig</code></li>
+        <li><a href="{{ path('recipe.show', {id: 32, slug: 'pate-blognaise'}) }}">Pâtes bolognaise</a></li>
     </ul>
-</div>
 {% endblock %}
