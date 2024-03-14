@@ -280,6 +280,17 @@ Méthode raccourci pour le même résultat
 
 show.html.twig
 ```
+{% extends 'base.html.twig' %}
+
+{% block title "Recette : " ~ recipe.title %}
+
+
+{% block body %}
+
+<h1>{{ recipe.title }}</h1>
+<p>{{ recipe.content | nl2br }}</p>
+
+{% endblock %}
 
 ```
 Au niveau de notre contrôleur lorsqu'on utilise la méthode render on peut lui passer en second paramètre un tableau contenant les variables que l'on souhaite envoyer à notre vue, variable que l'on pourra afficher à l'intérieur de notre fichier show.html.twig
