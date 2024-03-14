@@ -938,3 +938,204 @@ De la même manière si on souhaite crée un nouvel objet, on commence par crée
 
 #### DELETE
 On peut faire un `remove()` et ensuite on `flush()` pour enregistrer la suppression.
+
+## Les formulaires
+
+### Création du formulaire avec le FormBuilder
+On créer un formulaire qui va nous permettre de gérer les recettes que l'on nommera `RecipeType`. On mettra un suffixe `Type` pour le nom de nos formulaires. Et on le rattachera à l'entité `Recipe`.
+```shell
+php bin/console make:form
+
+ The name of the form class (e.g. GentlePopsicleType):
+ > RecipeType
+
+ The name of Entity or fully qualified model class name that the new form will be bound to (empty for none):
+ > Recipe
+Recipe
+
+ created: src/Form/RecipeType.php
+
+ 
+  Success! 
+ 
+
+ Next: Add fields to your form and start using it.
+ Find the documentation at https://symfony.com/doc/current/forms.html
+```
+
+Il va générer automatiquement un fichier `RecipeType.php` qu'il va placer dans le dossier `src\Form`
+
+Automatiquement le fichier a été prérempli en fonction des champs qui sont dans mon entité `Recipe`
+
+```php
+class RecipeType extends AbstractType
+{
+    public function buildForm(FormBuilderInterface $builder, array $options): void
+    {
+        $builder
+            ->add('title')
+            ->add('slug')
+            ->add('content')
+            ->add('createdAt', null, [
+                'widget' => 'single_text',
+            ])
+            ->add('updatedAt', null, [
+                'widget' => 'single_text',
+            ])
+            ->add('duration')
+        ;
+    }
+```
+
+Il a également défini une `data_class`, qui est une option qui permet d'expliquer qu'à l'intérieur de ce formulaire on va traiter un objet de type recette
+```php
+    public function configureOptions(OptionsResolver $resolver): void
+    {
+        $resolver->setDefaults([
+            'data_class' => Recipe::class,
+        ]);
+    }
+}
+```
+
+### Création de la route dans RecipeController
+
+On va créer une route qui sera
+`localhost:8000/recettes/{id}/edit`
+
+`RecipeController.php`
+```php
+    #[Route('/recettes/{id}/edit', name: 'recipe.edit')]
+    public function edit(int $id)
+    {
+        dd($recipe);
+    }
+
+```
+Dans cette action on va récupérer la recette qui correspond à un id
+
+> [!TIP]
+> Lorsqu'on a un {id} on peut directement mettre je veux une recette `Recipe $recipe`
+> (Tu vas recevoir un paramètre qui sera une recette)
+> Il va se charger de faire la requete `$recipe = $repository->find($id)` et ça économisera une ligne de code
+
+`RecipeController.php`
+```php
+    #[Route('/recettes/{id}/edit', name: 'recipe.edit')]
+    public function edit(Recipe $recipe)
+    {
+        dd($recipe);
+    }
+```
+
+Envoyer ça à ma vue `recipe/edit.html.twig`
+
+`RecipeController.php`
+```php
+    #[Route('/recettes/{id}/edit', name: 'recipe.edit')]
+    public function edit(Recipe $recipe)
+    {
+        return $this->render('recipe/edit.html.twig');
+    }
+```
+
+Au niveau de notre contrôleur on va pouvoir créer notre formulaire
+On va utiliser une méthode de notre `AbstactController` qui est `createForm()`
+
+La méthode `createForm()` prend en premier paramètre le formulaire que l'on va vouloir utiliser `RecipeType::class` et en second paramètre on va lui donner les données, on va lui donner l'entité `$recipe` qui est déjà rempli avec les données de la base de données.
+
+Maintenant on va l'envoyer à la vue `recipe/edit.html.twig` en plus des données `$recipe` on va lui envoyer `$form`
+
+```php
+    #[Route('/recettes/{id}/edit', name: 'recipe.edit')]
+    public function edit(Recipe $recipe)
+    {
+        // Je veux utiliser le recipeType que j'ai crée grâce à la commande make:form
+        $form = $this->createForm(RecipeType::class, $recipe);
+        return $this->render('recipe/edit.html.twig', [
+            'recipe' => $recipe,
+            'form' => $form
+        ]);
+    }
+```
+
+### Création de la vue edit.html.twig
+
+`edit.html.twig`
+```php
+{% extends 'base.html.twig' %}
+
+{% block title "Recette : " ~ recipe.title %}
+
+
+{% block body %}
+
+<h1>{{ recipe.title }}</h1>
+
+{{ form(form) }}
+
+{% endblock %}
+```
+
+**Il faut afficher le formulaire.**
+
+Pour cela on va utiliser les **helpers** qui sont des fonctions ou des méthodes qui simplifient la création et l'affichage de formulaire dans nos applications.
+
+Dans Symfony il y a un helper qui est une fonction `form()` et on passera en paramètre le formulaire `{{ form(form) }}` (`['form' => $form]`)
+
+Notre formulaire sera généré dynamiquement.
+
+Le formulaire sera en `method=post` et par défaut il n'y aura pas d'action. Et il y aura un champ caché qui permet de valider que le formulaire provient bien de cette page là, une sécurité mise automatiquement.
+
+### Utilisation d'un thème pour nos formulaires
+
+Aller dans le dossier configuration de Symfony et éditer le fichier de configuration de Twig
+
+Chemin : `config` > `packages` > `twig.yaml`
+
+On va ajouter une nouvelle clé `form_themes: ['bootstrap_5_layout.html.twig']`
+
+twig.yaml
+```yaml
+twig:
+    file_name_pattern: '*.twig'
+    form_themes: ['bootstrap_5_layout.html.twig']
+
+when@test:
+    twig:
+        strict_variables: true
+
+```
+
+`bootstrap_5_layout.html.twig` est un fichier Twig qui va définir les blocks qui permettent de piloter l'affichage des différents champs.
+
+On pourra également utiliser son propre thème.
+
+On peut également piloter l'organisation des champs comme ci-dessous
+Lorsque l'on met `{{ form_end(form) }}` il va afficher tous les autres champs
+
+`edit.html.twig`
+```php
+{% extends 'base.html.twig' %}
+
+{% block title "Recette : " ~ recipe.title %}
+
+
+{% block body %}
+
+<h1>{{ recipe.title }}</h1>
+
+{{ form_start(form) }}
+    <div class="d-flex">
+        {{ form_row(form.title) }}
+        {{ form_row(form.duration) }}
+    </div>
+{{ form_rest(form) }}
+{{ form_end(form) }}
+
+{% endblock %}
+```
+
+Si on souhaite afficher les autres champs qui manquent, il y a une méthode `{{ form_rest(form) }}` qui va afficher tous les champs qui n'ont pas été préalablement affiché dans notre formulaire.
+
+On peut ajouter le bouton directement dans la vue Twig ou dans `RecipeType.php`
