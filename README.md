@@ -229,7 +229,7 @@ home:
     controller: App\Controller\HomeController::index
 ```
 
-> [!TIPS]
+> [!TIP]
 > Pour connaitre l'ensemble des routes définies : php bin/console debug:router
 > Liste l'ensemble des routes de l'application
 
@@ -257,7 +257,7 @@ Lorsqu'on a généré nos contrôleurs, des fichiers Twig ont été automatiquem
 
 Si maintenant je veux rendre cette page `index.html.twig` en tapant l'URL http://localhost:8000/recette
 
-RecipeController.php
+`RecipeController.php`
 ```php
     #[Route('/recette', name: 'recipe.index')]
     public function index(Request $request): Response
@@ -278,8 +278,8 @@ Méthode raccourci pour le même résultat
 {% block title "Toutes les recettes" %}   
 ```
 
-show.html.twig
-```
+`show.html.twig`
+```php
 {% extends 'base.html.twig' %}
 
 {% block title "Recette : " ~ recipe.title %}
@@ -295,7 +295,7 @@ show.html.twig
 ```
 Au niveau de notre contrôleur lorsqu'on utilise la méthode render on peut lui passer en second paramètre un tableau contenant les variables que l'on souhaite envoyer à notre vue, variable que l'on pourra afficher à l'intérieur de notre fichier show.html.twig
 
-**Source : **
+**Source :** 
 - https://symfony.com/doc/current/reference/configuration/twig.html
 
 **Récupérer la route courante dans Twig**
@@ -322,7 +322,7 @@ Au niveau de notre contrôleur lorsqu'on utilise la méthode render on peut lui 
 
 Dans templates :
 
-On va mettre tout ce qui est commun dans base.html.twig
+On va mettre tout ce qui est commun dans `base.html.twig`
 
 Dans nos vues on fait :
 ```php
@@ -339,7 +339,7 @@ on définit un block body
 {% endblock %}
 ```
 
-Dans notre contrôleur, src/controller 
+Dans notre contrôleur, `src/controller` 
 
 On va souvent avoir à la fin de notre code une méthode render on lui passera en premier paramètre le nom du fichier Twig que l'on souhaite utiliser et en second paramètre un tableau contenant tout ce que l'on souhaite envoyer à notre vue.
 
@@ -374,7 +374,7 @@ SELECT VERSION();
 ```
 
 Éditer le fichier `.env`
-```
+```shell
 DATABASE_URL="mysql://root:root@127.0.0.1:3306/db_cook?serverVersion=8.2.0&charset=utf8mb4"
 ```
 
@@ -438,13 +438,13 @@ Add another property? Enter the property name (or press <return> to stop adding 
  >
 ```
 
-> [!TIPS]
+> [!TIP]
 > La valeur entre crochets [no] est la valeur par défaut on peut simplement appuyer sur entrée
 
 ### Entity
 
-Si on retourne sur notre application dans src
-On a un nouveau dossier Entity qui va contenir notre recette
+Si on retourne sur notre application dans `src`
+On a un nouveau dossier `Entity` qui va contenir notre recette
 Recipe.php
 
 Si on ouvre Recipe.php c'est un fichier php classique qui contient une class Recipe qui contient différentes propriétés, chaque propriété correspondant à ce que j'ai rentré dans la console
@@ -455,7 +455,7 @@ Il a également créé des **getters** et des **setters** : ce sont des méthode
 #### Attributs
 Ce qu'on remarque il a aussi créé des **attributs**, ces attributs permettent à l'ORM de comprendre comment les données seront sauvegardées dans notre base de données
 
-Par exemple pour le champ title :
+Par exemple pour le champ `title` :
 
 On sait que le title sera une colonne dans notre base de données et aura une taille de 255 caractères
 ```php
@@ -526,15 +526,15 @@ public function down(Schema $schema): void
 ```
 
 On exécute notre migration
-```php
+```shell
 php bin/console doctrine:migrations:migrate
 ```
 
-> [!TIPS]
+> [!TIP]
 > En tapant cette ligne, il vous dira que la commande n'est pas définie et il vous proposera la bonne ligne de commande, c'est une astuce pour éviter de taper la commande en entier.
-> ``php bin/console migrate`
+> `php bin/console migrate`
 
-```php
+```shell
 $ php bin/console doctrine:migrations:migrate
 
  WARNING! You are about to execute a migration in database "db_cook" that could result in schema changes and data loss. Are you sure you wish 
@@ -545,7 +545,7 @@ to continue? (yes/no) [yes]:
 [notice] finished in 137.1ms, used 24M memory, 1 migrations executed, 2 sql queries
 ```
 
-La table: doctrine_migration_versions
+La table: `doctrine_migration_versions`
 Va retenir l'ensemble des migrations qui ont été exécutées
 
 
@@ -596,7 +596,7 @@ Lorsqu'on utilise une propriété privée dans Twig, il recherche d'abord un get
 
 Donc quand on fait `recipe.title` c'est comme si l'on faisait `recipe.getTitle()`.
 
-> [!TIPS]
+> [!TIP]
 > Dans Twig au lieu d'écrire {{ recipe.getTitle() }} on peut l'écrire {{ recipe.title }}
 
 
@@ -818,7 +818,7 @@ Tous les setters sont des setters Fluent c'est-à-dire que lorsqu'ils ont fini d
 
 `\DateTimeImmutable` est une classe fournie par php pour gérer les dates et les heures. Immutable : veut dire que la date est immuable. Une fois créée, elle ne peut pas être modifiée. Cela garantit que la date de création reste constante.
 
-Source : 
+**Source :** 
 - https://www.php.net/manual/fr/class.datetimeimmutable.php
 
 Là on a créé notre objet, mais si on fait un `flush()` derrière cet objet-là ne sera pas automatiquement sauvegardé dans notre base de données, parce l'Entity Manager n'est pas au courant que cet objet existe, il n'y a pas de lien qui a été fait. Donc avant de faire un flush il faudra lui dire au niveau de l'Entity Manager je veux que tu persistes cet objet-là `persist($recipe)`.
@@ -849,7 +849,7 @@ Si on ne fait qu'un persist ça ne fera rien. Ce n'est que lorsqu'on fait un flu
 ### En résumé :
 Dès que l'on voudra faire des modifications au niveau de la base de données, ce sera l'Entity Manager que l'on devra utiliser.
 
-> [!TIPS]
+> [!TIP]
 > L'Entity Manager peut permettre de récupérer un repository
 
 Je lui donne le nom de la classe qui correspond à mon entité, il a va automatiquement retrouver le repository associé
@@ -906,6 +906,9 @@ Vu qu'on utilise un select on ne va pas récupérer des champs particuliers, ce 
 - `getSingleScalarResult()` : Donnera directement le premier champ
 
 Ces fonctions-là sont intéressantes dès lors qu'on ne veut pas simplement récupérer une collection d'entités.
+
+> [!NOTE]
+> Une **valeur scalaire** est une valeur simple. Elle représente une seule donnée.
 
 Pour retourner le premier champ en un entier
 ```php
