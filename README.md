@@ -7,34 +7,36 @@ composer create-project symfony/skeleton:"7.0.*" my_project_directory
 cd my_project_directory
 composer require webapp
 ```
-**.env** : qui va nous permettre de piloter les variables d'environnement de configurer le framework
-assets : contient fichier css / js
-bin : console interagir avec le framework et phpunit qui est une sorte de pont pour interagir avec phpunit l'outil de test
+**`.env`** : qui va nous permettre de piloter les variables d'environnement de configurer le framework
+
+**`assets`** : contient fichier CSS/JS ...
+
+**`bin`** : console interagir avec le framework et phpunit qui est une sorte de pont pour interagir avec phpunit l'outil de test
 
 ```shell
 # liste l'ensemble des opérations que l'ont peut faire avec symfony
 php bin/console : symfony
 ```
 
-**config** : configuration du framework et organiser en fonction des différents modules et utilise la syntaxe yaml basé sur l'indentation on a une clé: une valeur
+**`config`** : configuration du framework et organiser en fonction des différents modules et utilise la syntaxe yaml basé sur l'indentation on a une clé: une valeur
 migrations : qui contient les migrations ça a attrait à la base de données
 
-**public** : qui servira de dossier racine, lorsqu'on va héberger symfony c'est celui-ci qui servira de racine à notre serveur web
+**`public`** : qui servira de dossier racine, lorsqu'on va héberger symfony c'est celui-ci qui servira de racine à notre serveur web
 
-**src** : contient l'ensemble de nos classes qui sont dans le namespace \App on trouve dans composer.json autoload on voit que le namespace App\\ est branché sur le src /
+**`src`** : contient l'ensemble de nos classes qui sont dans le namespace \App on trouve dans composer.json autoload on voit que le namespace App\\ est branché sur le src /
 
-**templates** : va contenir nos vues HTML
+**`templates`** : va contenir nos vues HTML
 
-**tests** : pour écrire nos tests
+**`tests`** : pour écrire nos tests
 
-**translations** : va contenir nos traductions
+**`translations`** : va contenir nos traductions
 
-**var** : va contenir des logs et des fichiers temporaires (vérifier qu'il est accessible en écriture)
+**`var`** : va contenir des logs et des fichiers temporaires (vérifier qu'il est accessible en écriture)
 
 **Les dossiers qui nous intéressent :**
-- public
-- src
-- templates
+- `public`
+- `src`
+- `templates`
 
 ## Lancement du serveur php en local
 
@@ -46,7 +48,9 @@ php -S localhost:8000 -t public
 ## Notre première page
 
 - Création d'un contrôleur, c'est une classe qui va contenir différente méthode chaque méthode correspondant en général à une URL particulière
-php bin/console make:controller HomeController / Pour générer le contrôleur de notre page d'accueil
+```shell
+php bin/console make:controller HomeController` # Pour générer le contrôleur de notre page d'accueil
+```
 
 ```shell
  created: src/Controller/HomeController.php
@@ -54,7 +58,7 @@ php bin/console make:controller HomeController / Pour générer le contrôleur d
 ```
 
  Un contrôleur c'est une classe qui contient des méthodes et chaque méthode va correspondre à une page
- Les méthodes dans un contrôleur doivent toujours renvoyer une réponse  c'est un objet qui provient de symfony on retourne use Symfony\Component\HttpFoundation\Response;
+ Les méthodes dans un contrôleur doivent toujours renvoyer une réponse  c'est un objet qui provient de symfony on retourne `use Symfony\Component\HttpFoundation\Response;`
  Il faudra typer Response
  Est on va retourner une nouvelle réponse c'est objet lorsqu'on le construit on lui passe en premier paramètre et en second paramètre statut puis les en-têtes
 
@@ -72,7 +76,7 @@ Ce contrôleur HomeController il va falloir expliquer au framework que l'URL rac
 Dans le dossier config on a un fichier routes.yaml
 On va créer une nouvelle route
 
-Lorsqu'on a l'URL racine / il faut que tu ailles chercher cette action execute la méthode index
+Lorsqu'on a l'URL racine `/` il faut que tu ailles chercher cette action execute la méthode index
 routes.yaml
 ```yaml
 home:
@@ -80,10 +84,10 @@ home:
     controller: App\Controller\HomeController::index
 ```
 
-Autre méthode on rajoute un attribut au-dessus de notre méthode, elle est importée depuis le namespace use Symfony\Component\Routing\Attribute\Route;
+Autre méthode on rajoute un attribut au-dessus de notre méthode, elle est importée depuis le namespace use `Symfony\Component\Routing\Attribute\Route`;
 En premier paramètre on spécifie le chemin, en second le nom
 J'ai déclaré ma route au travers d'un attribut
-#[Route("chemin", nom)]
+`#[Route("chemin", nom)]`
 ```php
 class HomeController
 {
@@ -95,8 +99,9 @@ class HomeController
 }
 ```
 
-AbstractController va fournir un ensemble de méthode utile pour les cas génériques le extends AbstractController (il va nous fournir des méthodes supplémentaires)
-Par exemple on peut rediriger un utilisateur avec return $this->redirect
+`AbstractController` va fournir un ensemble de méthode utile pour les cas génériques le `extends AbstractController` (il va nous fournir des méthodes supplémentaires)
+
+Par exemple on peut rediriger un utilisateur avec `return $this->redirect`
 ```php
 namespace App\Controller;
 
@@ -115,7 +120,7 @@ class HomeController extends AbstractController
 }
 ```
 
-Objet Request qui va nous permettre de gérer ce qui rentre dans le framework
+Objet `Request` qui va nous permettre de gérer ce qui rentre dans le framework
 Dans get on peut mettre un second paramètre nom par défaut
 ```php
 // D'habitude on ferait en php 
@@ -133,9 +138,9 @@ class HomeController extends AbstractController
 }
 ```
 
-Dans c'est objet Request
-dump() vardump amélioré
-dd() vardump amélioré avec un die derrière
+Dans c'est objet `Request`
+- `dump()` vardump amélioré
+- `dd()` vardump amélioré avec un die derrière
 
 ```php
 namespace App\Controller;
@@ -155,15 +160,15 @@ class RecipeController extends AbstractController
 }
 ```
 Si on veut récupérer ces attributs, on peut récupérer le slug et l'id
-Beaucoup d'objets de la Request vont être de type parameterBag ça permet de représenter une collection de paramètres
+Beaucoup d'objets de la Request vont être de type `parameterBag` ça permet de représenter une collection de paramètres
 
 http://localhost:8000/recette/pate-bolognaise-32
 Cependant on souhaiterait que pate-bolognaise soit le slug et 32 l'id
 
 On peut rajouter des options supplémentaires en utilisant des requirements: dans l'attribut Route
-Les requirements vont nous permettre de spécifier le format attendu pour les paramètres de notre URL sous forme de tableau par exemple je souhaite que l'id soit simplement des nombres requirements: ['id' => '\d+'] \d+ est une expression régulière et je voudrais que le slug soit des caractères alpha numériques en minuscule des nombres et un tiret.
+Les requirements vont nous permettre de spécifier le format attendu pour les paramètres de notre URL sous forme de tableau par exemple je souhaite que l'id soit simplement des nombres requirements: `['id' => '\d+'] \d+']` est une expression régulière et je voudrais que le slug soit des caractères alpha numériques en minuscule des nombres et un tiret.
 
-Si on souhaite récupérer l'id sous la forme d'un entier getInt('id')
+Si on souhaite récupérer l'id sous la forme d'un entier `getInt('id')`
 ```php
 class RecipeController extends AbstractController
 {
@@ -175,10 +180,10 @@ class RecipeController extends AbstractController
 }
 ```
 
-On met les paramètres dans l'URL '/recette/{slug}-{id}' on spécifie les requirements (format attendu pour ces paramètres) et ensuite on peut utiliser la propriété attributes sur la requête pour récupérer les informations qui nous intéresse.
+On met les paramètres dans l'URL '`/recette/{slug}-{id}`' on spécifie les requirements (format attendu pour ces paramètres) et ensuite on peut utiliser la propriété attributes sur la requête pour récupérer les informations qui nous intéresse.
 
 On peut lui spécifier les paramètres directement au niveau de notre méthode index je m'attends à avoir une chaine de caractère qui soit le slug et un entier qui soit l'id.
-dd($slug, $id);
+`dd($slug, $id);`
 On va voir que ça va être automatiquement hydraté avec les bonnes valeurs
 ```php
 class RecipeController extends AbstractController
@@ -191,7 +196,7 @@ class RecipeController extends AbstractController
 }
 ```
 
-2 façons de retourner du json
+2 façons de retourner du json :
 ```php
     #[Route('/recette/{slug}-{id}', name: 'recipe.show', requirements: ['id' => '\d+', 'slug' => '[a-z0-9-]+'])]
     public function show(Request $request, string $slug, int $id): Response
@@ -209,7 +214,7 @@ class RecipeController extends AbstractController
 ```
 
 Une méthode qui renvoie une réponse
-On a la possibilité de définir les routes directement de manière adjacente avec un attribut ou via le fichier config\routes.yaml
+On a la possibilité de définir les routes directement de manière adjacente avec un attribut ou via le fichier `config\routes.yaml`
 
 exemple
 ```yaml
@@ -233,12 +238,13 @@ home:
 Lorsqu'on a généré nos contrôleurs, des fichiers Twig ont été automatiquement générés dans le dossier templates
 
 ça va nous permettre d'utiliser un tag
-extends va étendre du fichier base.html.twig
+`extends` va étendre du fichier `base.html.twig`
 ```php
 {% extends 'base.html.twig' %}
 ```
 
-Documentation de Twig : https://twig.symfony.com/doc/
+**Documentation de Twig : **
+- https://twig.symfony.com/doc/
 
 ```php
 {% extends 'base.html.twig' %}
@@ -249,7 +255,7 @@ Documentation de Twig : https://twig.symfony.com/doc/
 
 ```
 
-Si maintenant je veux rendre cette page index.html.twig en tapant l'URL http://localhost:8000/recette
+Si maintenant je veux rendre cette page `index.html.twig` en tapant l'URL http://localhost:8000/recette
 
 RecipeController.php
 ```php
@@ -260,7 +266,7 @@ RecipeController.php
     }
 ```
 
-Pour changer le <title>
+Pour changer le `<title>`
 ```php
 {% block title %}
     Toutes les recettes
