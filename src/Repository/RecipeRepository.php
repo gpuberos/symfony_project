@@ -37,6 +37,16 @@ class RecipeRepository extends ServiceEntityRepository
                     ->getResult();
     }
 
+    public function findTotalDuration(): int
+    {
+        return $this->createQueryBuilder('r')
+        // Je veux sélectionner un champ particulier
+        // On veut la somme des durations et on va l'appeler total
+            ->select('SUM(r.duration) as total')
+            ->getQuery()
+            ->getSingleScalarResult();
+    }
+
     //    /**
     //     * @return Recipe[] Returns an array of Recipe objects
     //     */
