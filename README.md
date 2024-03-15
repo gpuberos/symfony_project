@@ -1431,7 +1431,9 @@ when@test:
 
 **Documentation* :
 - http_method_override : https://symfony.com/doc/current/reference/configuration/framework.html#http-method-override
-- Form Event : https://symfony.com/doc/current/form/events.html
+
+
+### AutoSlug
 
 Lorsqu'un formulaire est soumis, il se déroule généralement en 3 étapes :
 
@@ -1439,6 +1441,8 @@ Lorsqu'un formulaire est soumis, il se déroule généralement en 3 étapes :
 2. **SUBMIT** : Lorsque le formulaire est soumis, les informations saisies par l'utilisateur sont envoyées au serveur. Dans cette phase, les données sont validées, nettoyées et associées à votre modèle (ou entité) côté serveur. C'est là que les informations sont enregistrées dans la base de données ou utilisées pour d'autres traitements.
 3. **POST_SUBMIT** : Après que les données ont été traitées et enregistrées, cet événement intervient. Vous pouvez effectuer des actions supplémentaires ici, telles que l'envoi d'e-mails de confirmation, la mise à jour d'autres entités liées, etc.
 
+Documentation : 
+- Form Event : https://symfony.com/doc/current/form/events.html
 
 `Form\RecipeType.php`
 ```php
@@ -1465,6 +1469,7 @@ Lorsqu'un formulaire est soumis, il se déroule généralement en 3 étapes :
 
 **callable** : le type callable est un moyen de dire à votre code : "Hé, quand ceci se produit, exécute cette fonction". Il permet à une fonction d'appeler une autre fonction (ou méthode) au bon moment.
 
+`Form\RecipeType.php`
 ```php
     public function autoSlug(PreSubmitEvent $event): void
     {
@@ -1488,10 +1493,13 @@ Lorsqu'un formulaire est soumis, il se déroule généralement en 3 étapes :
 `getData()` : Permet de récupérer les données qui ont été posté
 `setData()` : Permet de modifier les données
 
-Documentations :
+Documentation :
 - **Slugger** : https://symfony.com/doc/current/components/string.html#slugger
 
 
+### attachTimestamps
+
+`Form\RecipeType.php`
 ```php
     public function attachTimestamps(PostSubmitEvent $event): void
     {
@@ -1516,3 +1524,322 @@ Documentations :
 
 La fonction `attachTimestamps` met à jour les horodatages (`updatedAt` et `createdAt`) d'un objet `Recipe` lorsqu'un événement `PostSubmitEvent` se produit. 
 Si l'objet `$data` n'est pas une instance de `Recipe`, la fonction se termine.
+
+## Validation de formulaire
+
+### Les contraintes au niveau du formulaire
+
+`Form\RecipeType.php`
+```php
+    public function buildForm(FormBuilderInterface $builder, array $options): void
+    {
+        $builder
+            ->add('title')
+            ->add('slug', TextType::class, [
+                'required' => false,
+                'constraints' => [
+                    new Length(min: 10),
+                    new Regex('/^[a-z0-9]+(?:-[a-z0-9]+)*$/', message: "Ceci n'est pas un slug valide")
+                ]
+            ])
+            ->add('content')
+            ->add('duration')
+            ->add('save', SubmitType::class, [
+                'label' => 'Envoyer'
+            ])
+            ->addEventListener(FormEvents::PRE_SUBMIT, $this->autoSlug(...))
+            ->addEventListener(FormEvents::POST_SUBMIT, $this->attachTimestamps(...));
+    }
+```
+
+Documentation :
+- **Validation Constraints** : https://symfony.com/doc/current/reference/constraints.html
+- Contrainte `Length()` : https://symfony.com/doc/current/reference/constraints/Length.html
+- Regex : https://symfony.com/doc/current/reference/constraints/Regex.html
+
+Outils :
+- Regex for url slug : https://ihateregex.io/expr/url-slug/
+
+Autres contraintes intéressantes :
+- `All()` permet d'appliquer une contrainte à tous les éléments d'un tableau : https://symfony.com/doc/current/reference/constraints/All.html
+- `AtLeastOneOf()`
+- `Sequentially()` : ça permet de couper une validation si une des règles de validation précédente n'est pas remplie. Et ainsi afficher qu'un seul message (pour éviter de spammer l'utilisateur d'information).
+
+`Form\RecipeType.php`
+```php
+    public function buildForm(FormBuilderInterface $builder, array $options): void
+    {
+        $builder
+            ->add('title')
+            ->add('slug', TextType::class, [
+                'required' => false,
+                'constraints' => new Sequentially([
+                    new Length(min: 10),
+                    new Regex('/^[a-z0-9]+(?:-[a-z0-9]+)*$/', message: "Ceci n'est pas un slug valide")
+                ])
+            ])
+            ->add('content')
+            ->add('duration')
+            ->add('save', SubmitType::class, [
+                'label' => 'Envoyer'
+            ])
+            ->addEventListener(FormEvents::PRE_SUBMIT, $this->autoSlug(...))
+            ->addEventListener(FormEvents::POST_SUBMIT, $this->attachTimestamps(...));
+    }
+```
+
+### Les contraintes au niveau de l'entité
+
+`Entity\Recipe.php`
+```php
+#[ORM\Entity(repositoryClass: RecipeRepository::class)]
+class Recipe
+{
+    #[ORM\Id]
+    #[ORM\GeneratedValue]
+    #[ORM\Column]
+    private ?int $id = null;
+
+    #[ORM\Column(length: 255)]
+    #[Assert\Length(min: 5)]
+    private ?string $title = null;
+
+    #[ORM\Column(length: 255)]
+    #[Assert\Length(min: 5)]
+    #[Assert\Regex('/^[a-z0-9]+(?:-[a-z0-9]+)*$/', message: 'Invalid slug')]
+    private ?string $slug = null;
+
+    #[ORM\Column(type: Types::TEXT)]
+    #[Assert\Length(min: 5)]
+    private ?string $content = null;
+
+    #[ORM\Column]
+    private ?\DateTimeImmutable $createdAt = null;
+
+    #[ORM\Column]
+    private ?\DateTimeImmutable $updatedAt = null;
+
+    #[ORM\Column(nullable: true)]
+    #[Assert\NotBlank()]
+    #[Assert\Positive()]
+    private ?int $duration = null;
+```
+
+
+
+`Entity\Recipe.php`
+```php
+  #[ORM\Column(nullable: true)]
+    #[Assert\NotBlank()]
+    #[Assert\Positive()]
+    private ?int $duration = null;
+
+```
+
+`NotBlank()` : on n'accepte pas de valeur `null` (il ajoute un attribut required sur le champ)
+`Positive()` : la valeur positive ne va agir que si la valeur est un entier
+
+Documentation :
+- Number Positive : https://symfony.com/doc/current/reference/constraints/Positive.html
+
+> [!IMPORTANT]
+> Il est conseillé de mettre les **contraintes directement dans les entités**. 
+> On mettra les contraintes dans le form, uniquement si on a des champs qui ne correspondent à rien au niveau de l'entité.
+
+
+**Contrainte qui se met directement au niveau de la class** :
+
+- `UniqueEntity()` : https://symfony.com/doc/current/reference/constraints/UniqueEntity.html
+
+On peut lui passer en paramètre un tableau, mais dans ce cas c'est la combinaison des champs qui sera unique.
+
+```php
+#[ORM\Entity(repositoryClass: RecipeRepository::class)]
+#[UniqueEntity('title')]
+#[UniqueEntity('slug')]
+class Recipe
+```
+
+Contrainte : Recette de cuisinne de moins de 24h
+```php
+    #[ORM\Column(nullable: true)]
+    #[Assert\Positive()]
+    #[Assert\LessThan(value: 1440)]
+    private ?int $duration = null;
+```
+`LessThan()` : https://symfony.com/doc/current/reference/constraints/LessThan.html
+
+
+### Contraintes personnalisées
+
+#### Création d'une liste de mots bannies
+
+On ouvre un terminal
+
+```shell
+$ php bin/console make:validator
+
+ The name of the validator class (e.g. EnabledValidator):
+ > BanWordValidator
+
+ created: src/Validator/BanWordValidator.php
+ created: src/Validator/BanWord.php
+
+ 
+  Success! 
+ 
+
+ Next: Open your new constraint & validators and add your logic.
+ Find the documentation at http://symfony.com/doc/current/validation/custom_constraint.html
+```
+
+Le dossier Validator est crée et contient 2 fichiers :
+
+`src/Validator/BanWordValidator.php`
+```php
+namespace App\Validator;
+
+use Symfony\Component\Validator\Constraint;
+use Symfony\Component\Validator\ConstraintValidator;
+
+class BanWordValidator extends ConstraintValidator
+{
+    public function validate($value, Constraint $constraint)
+    {
+        /* @var BanWord $constraint */
+
+        if (null === $value || '' === $value) {
+            return;
+        }
+
+        $value = strtolower($value);
+        foreach ($constraint->banWords as $banWord) {
+            if (str_contains($value, $banWord)) {
+                $this->context->buildViolation($constraint->message)
+                ->setParameter('{{ banWord }}', $banWord)
+                ->addViolation();
+            }
+        }     
+    }
+}
+```
+
+`src/Validator/BanWord.php`
+```php
+namespace App\Validator;
+
+use Symfony\Component\Validator\Constraint;
+
+#[\Attribute(\Attribute::TARGET_PROPERTY | \Attribute::TARGET_METHOD | \Attribute::IS_REPEATABLE)]
+class BanWord extends Constraint
+{
+    public function __construct(
+        public string $message = 'This contains a banned word "{{ banWord }}".',
+        public array $banWords = ['spam', 'viagra'],
+        ?array $groups = null,
+        mixed $payload = null
+        ) 
+    {
+        parent::__construct(null, $groups, $payload);
+    }
+}
+```
+
+####  Création de groups :
+
+Permets d'activer ou de désactiver des règles de validation en fonction de situation.
+
+Par exemple, lorsqu'on crée une entité, on a moins de contraintes de validation que lorsqu'on l'édite. Dans ce cas là ça peut être intéressant d'associer des groupes particuliers à nos différentes règles pour pouvoir par la suite facilement depuis un formulaire activer ou désactiver certaines règles.
+
+`\Entity\Recipe.php`
+```php
+    #[ORM\Column(length: 255)]
+    #[Assert\Length(min: 5, groups: ['Extra'])]
+    #[BanWord(groups:['Extra'])]
+    private ?string $title = null;
+```
+
+`\form\RecipeType.php`
+```php
+    public function configureOptions(OptionsResolver $resolver): void
+    {
+        $resolver->setDefaults([
+            'data_class' => Recipe::class,
+            'validation_groups' => ['Default', 'Extra']
+        ]);
+    }
+```
+
+### La valeur vide pour les champs (null)
+
+> [!IMPORTANT]
+> Pensez à ajouter la contrainte `NotBlank()` au niveau des Assert pour s'assurer qu'un champ ne soit pas laissé vide. Par défaut les règles de validation vont laisser passer un champ vide.
+
+Si on met un champ title vide on va avoir une erreur par défaut le formulaire va considérer que cette valeur est nulle et il va essayer d'appeler setTitle() en lui donnant une valeur nulle
+
+Pourtant dans le code ci-dessous on lui a dit c'est forcement une chaine de caractère.
+`Entity\Recipe.php`
+```php
+public function setTitle(string $title): static
+```
+
+Une solution c'est dans le champ on peut spécifier la valeur à associer si le champ est vide en utilisant la clé `empty_data` et on lui donnera une chaine de caractère vide `''`.
+
+`Form\RecipeType.php`
+```php
+    public function buildForm(FormBuilderInterface $builder, array $options): void
+    {
+        $builder
+            ->add('title', TextType::class, [
+                'empty_data' => ''
+            ])
+            ->add('slug', TextType::class, [
+                'required' => false,
+            ])
+            ->add( 'content', TextareaType::class, [
+                'empty_data' => ''
+            ])
+            ->add('duration')
+            ->add('save', SubmitType::class, [
+                'label' => 'Envoyer'
+            ])
+            ->addEventListener(FormEvents::PRE_SUBMIT, $this->autoSlug(...))
+            ->addEventListener(FormEvents::POST_SUBMIT, $this->attachTimestamps(...));
+    }
+```
+
+On peut également dire dans l'entité Recipe que le titre n'est jamais nul, et qu'il est toujours une chaine de caractère par défaut, en remplaçant `?string $title = null` par `string $title = ''` pour faire en sorte d'avoir des types de variables qui sont cohérents par rapport à ce que l'on définit au niveau des setters. 
+On ne travaillera plus avec des null et ça permettra d'éviter des erreurs par la suite.
+
+```php
+    #[ORM\Column(length: 255)]
+    #[Assert\Length(min: 5)]
+    #[BanWord]
+    private string $title = '';
+
+    #[ORM\Column(length: 255)]
+    #[Assert\Length(min: 5)]
+    #[Assert\Regex('/^[a-z0-9]+(?:-[a-z0-9]+)*$/', message: 'Invalid slug')]
+    private string $slug = '';
+
+    #[ORM\Column(type: Types::TEXT)]
+    #[Assert\Length(min: 5)]
+    private string $content = '';
+
+    // ... code
+
+    public function getTitle(): string
+    {
+        return $this->title;
+    }
+
+    public function getSlug(): string
+    {
+        return $this->slug;
+    }
+
+    public function getContent(): string
+    {
+        return $this->content;
+    }
+```
