@@ -1005,7 +1005,7 @@ On va créer une route qui sera
 
 `RecipeController.php`
 ```php
-    #[Route('/recettes/{id}/edit', name: 'recipe.edit')]
+    #[Route('/recettes/{id}/edit', name: 'recipe.edit', methods: ['GET', 'POST'])]
     public function edit(int $id)
     {
         dd($recipe);
@@ -1021,7 +1021,7 @@ Dans cette action on va récupérer la recette qui correspond à un id
 
 `RecipeController.php`
 ```php
-    #[Route('/recettes/{id}/edit', name: 'recipe.edit')]
+    #[Route('/recettes/{id}/edit', name: 'recipe.edit', methods: ['GET', 'POST'])]
     public function edit(Recipe $recipe)
     {
         dd($recipe);
@@ -1032,7 +1032,7 @@ Envoyer ça à ma vue `recipe/edit.html.twig`
 
 `RecipeController.php`
 ```php
-    #[Route('/recettes/{id}/edit', name: 'recipe.edit')]
+    #[Route('/recettes/{id}/edit', name: 'recipe.edit', methods: ['GET', 'POST'])]
     public function edit(Recipe $recipe)
     {
         return $this->render('recipe/edit.html.twig');
@@ -1047,7 +1047,7 @@ La méthode `createForm()` prend en premier paramètre le formulaire que l'on va
 Maintenant on va l'envoyer à la vue `recipe/edit.html.twig` en plus des données `$recipe` on va lui envoyer `$form`
 
 ```php
-    #[Route('/recettes/{id}/edit', name: 'recipe.edit')]
+    #[Route('/recettes/{id}/edit', name: 'recipe.edit', methods: ['GET', 'POST'])]
     public function edit(Recipe $recipe)
     {
         // Je veux utiliser le recipeType que j'ai crée grâce à la commande make:form
@@ -1168,7 +1168,7 @@ public function buildForm(FormBuilderInterface $builder, array $options): void
 - Explication de toutes les options et comment les utiliser : https://symfony.com/doc/current/forms.html
 - Form Types Reference : https://symfony.com/doc/current/reference/forms/types.html
 
-#### Gestion du traitement (mise à jour de l'entité)
+#### UPDATE : Gestion du traitement (mise à jour de l'entité)
 
 Mettre à jour mon entité :
 
@@ -1180,7 +1180,7 @@ Fonctionnement est le suivant :
 2. Si le formulaire a été soumis (s'il y a eu soumission des données), il va modifier l'entité `$recipe` en remplissant ses champs avec les données provenant du formulaire
 
 ```php
-    #[Route('/recettes/{id}/edit', name: 'recipe.edit')]
+    #[Route('/recettes/{id}/edit', name: 'recipe.edit', methods: ['GET', 'POST'])]
     public function edit(Recipe $recipe, Request $request)
     {
         $form = $this->createForm(RecipeType::class, $recipe);
@@ -1212,13 +1212,14 @@ Pour cela on passe en paramètre de la méthode `edit` l'`EntityManager Interfac
 Ensuite on pourra rediriger l'utilisateur vers une nouvelle route.
 
 ```php
-    #[Route('/recettes/{id}/edit', name: 'recipe.edit')]
+    #[Route('/recettes/{id}/edit', name: 'recipe.edit', methods: ['GET', 'POST'])]
     public function edit(Recipe $recipe, Request $request, EntityManagerInterface $em)
     {
         $form = $this->createForm(RecipeType::class, $recipe);
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
+            $recipe->setUpdatedAt(new \DateTimeImmutable());
             $em->flush();
             $this->addFlash(
                'success',
@@ -1235,7 +1236,7 @@ Ensuite on pourra rediriger l'utilisateur vers une nouvelle route.
 
 ```
 
-### Affichage d'un message flash
+### MESSAGE : Affichage d'un message flash
 
 Un **message flash** est un moyen de stocker temporairement un message dans la session de l'utilisateur. 
 Ce message ne sera utilisé que pour la prochaine requête et sera automatiquement effacé après cela. 
@@ -1300,7 +1301,7 @@ Affiche les messages et on va les joindre par un point séparé d'un espace
 {{ message | join('. ') }}
 ```
 
-### Création d'un bouton ajout de recette
+### CREATE : Création d'un bouton ajout de recette
 
 On ouvre le fichier `\recipe\index.html.twig` et on crée un tableau avec un bouton qui utilise la route `recipe.edit`. 
 
@@ -1340,14 +1341,93 @@ Recipe.Controller.php
     {
         $recipe = new Recipe();
         $form = $this->createForm(RecipeType::class, $recipe);
+        $form->handleRequest($request);
         if ($form->isSubmitted() && $form->isValid()) {
+            $recipe->setCreatedAt(new \DateTimeImmutable());
+            $recipe->setUpdatedAt(new \DateTimeImmutable());
             $em->persist($recipe);
             $em->flush();
             $this->addFlash('success', 'La recette a bien été créée');
             return $this->redirectToRoute('recipe.index');
         }
         return $this->render('recipe/create.html.twig', [
+            'formTitle' => 'Créer une nouvelle recette',
             'form' => $form
         ]);
     }
 ```
+
+### DELETE : Suppression d'une recette
+
+```php
+    #[Route('/recettes/{id}', name: 'recipe.delete', methods: ['DELETE'])]
+    public function delete(Recipe $recipe, EntityManagerInterface $em)
+    {
+        $em->remove($recipe);
+        $em->flush();
+        $this->addFlash('success', 'La recette a bien été supprimée');
+        return $this->redirectToRoute('recipe.index');
+    }
+```
+
+`recipe\index.html.twig`
+
+```php
+<p>
+    <a href="{{ path('recipe.create') }}" class="btn btn-primary btn-sm">Créer une recette</a>
+</p>
+
+<table class="table">
+    <thead>
+        <tr>
+            <th>Titre</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for recipe in recipes %}
+            <tr>
+                <td>
+                    <a href="{{ path('recipe.show', {id: recipe.id, slug: recipe.slug}) }}">{{ recipe.title }}</a>
+                </td>
+                <td>
+                    <a href="{{ path('recipe.edit', {id: recipe.id}) }}" class="btn btn-primary btn-sm">Editer</a>
+                    <form action="{{ path('recipe.delete', {id: recipe.id}) }}" method="post">
+                        <input type="hidden" name="_method" value="DELETE">
+                        <button type="submit" class="btn btn-danger btn-sm">Supprimer</button>
+                    </form>
+                </td>
+            </tr>
+        {% endfor %}
+    </tbody>
+</table>
+```
+
+Dans le fichier `config\packages\framework.yaml`
+
+On ajoute la clé `http_method_override: true` pour activer la substitution de méthode HTTP. Cette fonctionnalité permet de modifier la méthode HTTP utilisée grâce à un champ caché de type `"hidden"` dans les formulaires.
+
+```php
+# see https://symfony.com/doc/current/reference/configuration/framework.html
+framework:
+    secret: '%env(APP_SECRET)%'
+    #csrf_protection: true
+
+    # Note that the session will be started ONLY if you read or write from it.
+    session: true
+
+    #esi: true
+    #fragments: true
+    http_method_override: true
+
+when@test:
+    framework:
+        test: true
+        session:
+            storage_factory_id: session.storage.factory.mock_file
+
+
+```
+
+**Documentation* :
+- http_method_override : https://symfony.com/doc/current/reference/configuration/framework.html#http-method-override

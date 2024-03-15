@@ -14,7 +14,7 @@ use Symfony\Component\Routing\Attribute\Route;
 class RecipeController extends AbstractController
 {
     #[Route('/recettes', name: 'recipe.index')]
-    public function index(Request $request, RecipeRepository $repository): Response
+    public function index(RecipeRepository $repository): Response
     {
         $recipes = $repository->findWithDurationLowerThan(20);
 
@@ -24,7 +24,7 @@ class RecipeController extends AbstractController
     }
 
     #[Route('/recettes/{slug}-{id}', name: 'recipe.show', requirements: ['id' => '\d+', 'slug' => '[a-z0-9-]+'])]
-    public function show(Request $request, string $slug, int $id, RecipeRepository $repository): Response
+    public function show(string $slug, int $id, RecipeRepository $repository): Response
     {
         $recipe = $repository->find($id);
         // Si le recipe est différent de celui qu'on a reçu dans l'url dans ce cas on fait une redirection
@@ -36,7 +36,7 @@ class RecipeController extends AbstractController
         ]);
     }
 
-    #[Route('/recettes/{id}/edit', name: 'recipe.edit')]
+    #[Route('/recettes/{id}/edit', name: 'recipe.edit', methods: ['GET', 'POST'])]
     public function edit(Recipe $recipe, Request $request, EntityManagerInterface $em)
     {
         $form = $this->createForm(RecipeType::class, $recipe);
@@ -77,5 +77,14 @@ class RecipeController extends AbstractController
             'formTitle' => 'Créer une nouvelle recette',
             'form' => $form
         ]);
+    }
+
+    #[Route('/recettes/{id}', name: 'recipe.delete', methods: ['DELETE'])]
+    public function delete(Recipe $recipe, EntityManagerInterface $em)
+    {
+        $em->remove($recipe);
+        $em->flush();
+        $this->addFlash('success', 'La recette a bien été supprimée');
+        return $this->redirectToRoute('recipe.index');
     }
 }

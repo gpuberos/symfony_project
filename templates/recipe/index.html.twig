@@ -3,6 +3,7 @@
 {% block title "Toutes les recettes" %}
 
 {% block body %}
+
 	<p>Lorem ipsum dolor sit, amet consectetur adipisicing elit. Est alias cumque voluptas ad dolores possimus dignissimos excepturi, et quam assumenda dolor consectetur saepe atque beatae esse praesentium eaque mollitia maxime?</p>
 
 	<p>
@@ -24,6 +25,10 @@
 					</td>
 					<td>
 						<a href="{{ path('recipe.edit', {id: recipe.id}) }}" class="btn btn-primary btn-sm">Editer</a>
+						<form action="{{ path('recipe.delete', {id: recipe.id}) }}" method="post">
+							<input type="hidden" name="_method" value="DELETE">
+							<button type="submit" class="btn btn-danger btn-sm">Supprimer</button>
+						</form>
 					</td>
 				</tr>
 			{% endfor %}
