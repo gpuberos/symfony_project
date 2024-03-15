@@ -803,7 +803,7 @@ $recipe = new Recipe();
 
 On va faire des setters pour remplir notre objet
 
-Tous les setters sont des setters Fluent c'est-à-dire que lorsqu'ils ont fini de faire le setter ils retournent l'instance de l'objet, ça permet d'enchainer les différentes méthodes les unes sur les autres. L'avantage, on n’est pas obligé de redéfinir les choses.
+Tous les setters sont des setters Fluent c'est-à-dire que lorsqu'ils ont fini de faire le setter ils retournent l'instance de l'objet, ça permet d'enchainer les différentes méthodes les unes sur les autres. L'avantage, on n'est pas obligé de redéfinir les choses.
 ```php
 
         $recipe->setTitle('Barbe à papa')
@@ -1431,3 +1431,10 @@ when@test:
 
 **Documentation* :
 - http_method_override : https://symfony.com/doc/current/reference/configuration/framework.html#http-method-override
+- Form Event : https://symfony.com/doc/current/form/events.html
+
+Lorsqu'un formulaire est soumis, il se déroule généralement en 3 étapes :
+
+1. **PRE_SUBMIT** : Cet événement se produit avant que les données du formulaire ne soient effectivement soumises. À ce stade, vous pouvez effectuer des validations supplémentaires ou des modifications sur les données du formulaire avant qu'elles ne soient traitées.
+2. **SUBMIT** : Lorsque le formulaire est soumis, les informations saisies par l'utilisateur sont envoyées au serveur. Dans cette phase, les données sont validées, nettoyées et associées à votre modèle (ou entité) côté serveur. C'est là que les informations sont enregistrées dans la base de données ou utilisées pour d'autres traitements.
+3. **POST_SUBMIT** : Après que les données ont été traitées et enregistrées, cet événement intervient. Vous pouvez effectuer des actions supplémentaires ici, telles que l'envoi d'e-mails de confirmation, la mise à jour d'autres entités liées, etc.
