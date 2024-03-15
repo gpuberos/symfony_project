@@ -1438,3 +1438,81 @@ Lorsqu'un formulaire est soumis, il se déroule généralement en 3 étapes :
 1. **PRE_SUBMIT** : Cet événement se produit avant que les données du formulaire ne soient effectivement soumises. À ce stade, vous pouvez effectuer des validations supplémentaires ou des modifications sur les données du formulaire avant qu'elles ne soient traitées.
 2. **SUBMIT** : Lorsque le formulaire est soumis, les informations saisies par l'utilisateur sont envoyées au serveur. Dans cette phase, les données sont validées, nettoyées et associées à votre modèle (ou entité) côté serveur. C'est là que les informations sont enregistrées dans la base de données ou utilisées pour d'autres traitements.
 3. **POST_SUBMIT** : Après que les données ont été traitées et enregistrées, cet événement intervient. Vous pouvez effectuer des actions supplémentaires ici, telles que l'envoi d'e-mails de confirmation, la mise à jour d'autres entités liées, etc.
+
+
+`Form\RecipeType.php`
+```php
+    public function buildForm(FormBuilderInterface $builder, array $options): void
+    {
+        $builder
+            ->add('title')
+            ->add('slug')
+            ->add('content')
+            ->add('duration')
+            ->add('save', SubmitType::class, [
+                'label' => 'Envoyer'
+            ])
+            ->addEventListener(FormEvents::PRE_SUBMIT, $this->autoSlug(...));
+    }
+
+    public function autoSlug()
+    {
+        
+    }
+```
+
+`autoSlug(...)` : on crée un callable `...` à partir de la méthode `autoSlug()`.
+
+**callable** : le type callable est un moyen de dire à votre code : "Hé, quand ceci se produit, exécute cette fonction". Il permet à une fonction d'appeler une autre fonction (ou méthode) au bon moment.
+
+```php
+    public function autoSlug(PreSubmitEvent $event): void
+    {
+        // Récupère les données du formulaire à partir de l'événement
+        $data = $event->getData();
+
+        // Vérifie si le champ "slug" est vide
+        if (empty($data['slug'])) {
+            // Crée une instance de la classe AsciiSlugger
+            $slugger = new AsciiSlugger();
+             // Génère un slug à partir du titre et convertit en minuscules
+            $data['slug'] = strtolower($slugger->slug($data['title']));
+        }
+         // Réinjecte les données mises à jour dans l'événement
+        $event->setData($data);
+    }
+```
+
+`autoSlug()` recevra en paramètre un `PreSubmitEvent`
+
+`getData()` : Permet de récupérer les données qui ont été posté
+`setData()` : Permet de modifier les données
+
+Documentations :
+- **Slugger** : https://symfony.com/doc/current/components/string.html#slugger
+
+
+```php
+    public function attachTimestamps(PostSubmitEvent $event): void
+    {
+        // Récupère les données associées à l'événement
+        $data = $event->getData();
+
+        // Vérifie si $data est une instance de la classe Recipe
+        if (!($data instanceof Recipe)) {
+            return; // Quitte la fonction si ce n'est pas une Recipe
+        }
+
+        // Met à jour la propriété updatedAt avec la date et l'heure actuelles
+        $data->setUpdatedAt(new DateTimeImmutable());
+
+        // Si l'objet n'a pas d'ID, initialise la propriété createdAt avec la date actuelle
+        if (!$data->getId()) {
+            $data->setCreatedAt(new DateTimeImmutable());
+        }
+    }
+
+```
+
+La fonction `attachTimestamps` met à jour les horodatages (`updatedAt` et `createdAt`) d'un objet `Recipe` lorsqu'un événement `PostSubmitEvent` se produit. 
+Si l'objet `$data` n'est pas une instance de `Recipe`, la fonction se termine.
