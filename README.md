@@ -1279,6 +1279,7 @@ On inclut notre fichier Twig `flash.html.twig`
         </main>
 ```
 
+Dans `flash.html.twig`
 ```php
 {% for type, messages in app.flashes %}
     <div class="alert alert-{{ type }}">
@@ -1287,12 +1288,66 @@ On inclut notre fichier Twig `flash.html.twig`
 {% endfor %}
 ```
 
-**Iterating over Keys and Values** : https://twig.symfony.com/doc/3.x/tags/for.html#iterating-over-keys-and-values
+Join : On a un tableau de valeurs et l'on peut choisir par quoi on les fusionne
 
-Join : On a un tableau de valeur et l'on peut choisir par quoi on les fusionnent
-**join** : https://twig.symfony.com/doc/3.x/filters/join.html
+Documentations :
+- **Iterating over Keys and Values** : https://twig.symfony.com/doc/3.x/tags/for.html#iterating-over-keys-and-values
+- **join** : https://twig.symfony.com/doc/3.x/filters/join.html
+
 
 Affiche les messages et on va les joindre par un point séparé d'un espace
 ```php
 {{ message | join('. ') }}
+```
+
+### Création d'un bouton ajout de recette
+
+On ouvre le fichier `\recipe\index.html.twig` et on crée un tableau avec un bouton qui utilise la route `recipe.edit`. 
+
+On crée un bouton Créer une recette et on va créer une route `recipe.create`.
+
+```php
+<p>
+    <a href="{{ path('recipe.create') }}" class="btn btn-primary btn-sm">Créer une recette</a>
+</p>
+
+<table class="table">
+    <thead>
+        <tr>
+            <th>Titre</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for recipe in recipes %}
+            <tr>
+                <td>
+                    <a href="{{ path('recipe.show', {id: recipe.id, slug: recipe.slug}) }}">{{ recipe.title }}</a>
+                </td>
+                <td>
+                    <a href="{{ path('recipe.edit', {id: recipe.id}) }}" class="btn btn-primary btn-sm">Editer</a>
+                </td>
+            </tr>
+        {% endfor %}
+    </tbody>
+</table>
+```
+
+Recipe.Controller.php
+```php
+    #[Route('/recettes/create', name: 'recipe.create')]
+    public function create(Request $request, EntityManagerInterface $em)
+    {
+        $recipe = new Recipe();
+        $form = $this->createForm(RecipeType::class, $recipe);
+        if ($form->isSubmitted() && $form->isValid()) {
+            $em->persist($recipe);
+            $em->flush();
+            $this->addFlash('success', 'La recette a bien été créée');
+            return $this->redirectToRoute('recipe.index');
+        }
+        return $this->render('recipe/create.html.twig', [
+            'form' => $form
+        ]);
+    }
 ```
