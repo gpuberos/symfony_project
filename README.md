@@ -1138,4 +1138,161 @@ Lorsque l'on met `{{ form_end(form) }}` il va afficher tous les autres champs
 
 Si on souhaite afficher les autres champs qui manquent, il y a une méthode `{{ form_rest(form) }}` qui va afficher tous les champs qui n'ont pas été préalablement affiché dans notre formulaire.
 
-On peut ajouter le bouton directement dans la vue Twig ou dans `RecipeType.php`
+On peut ajouter le bouton directement dans la vue Twig ou dans `RecipeType.php` qui se trouve dans `src\Form` en ajoutant `add('save', SubmitType::class)` en premier paramètre c'est le nom et en second le type de champ a utiliser. Si on souhaite changer le libellé en ajoutera `['label' => 'Envoyer']
+
+On pourra faire la même chose sur les autres champs en précisant le type de champ et son label
+
+```php
+public function buildForm(FormBuilderInterface $builder, array $options): void
+{
+    $builder
+        ->add('title', TextType::class, [
+            'label' => 'Titre'
+        ])
+        ->add('slug')
+        ->add('content')
+        ->add('createdAt', null, [
+            'widget' => 'single_text'
+        ])
+        ->add('updatedAt', null, [
+            'widget' => 'single_text'
+        ])
+        ->add('duration')
+        ->add('save', SubmitType::class, [
+            'label' => 'Envoyer'
+        ]);
+}
+```
+
+**Documentation formulaire** :
+- Explication de toutes les options et comment les utiliser : https://symfony.com/doc/current/forms.html
+- Form Types Reference : https://symfony.com/doc/current/reference/forms/types.html
+
+#### Gestion du traitement (mise à jour de l'entité)
+
+Mettre à jour mon entité :
+
+Au niveau du contrôleur `RecipeController.php` on demande à notre formulaire de gérer la requête pour cela on va utiliser la méthode `handleRequest()` et on doit lui passer une requête.
+Au niveau du contrôleur on va lui indiquer qu'on a besoin de l'objet `Request` de `HttpFoundation` et je vais le passer à mon formulaire `handleRequest($request)`.
+
+Fonctionnement est le suivant :
+1. Le code va vérifier si la requête est en **POST**
+2. Si le formulaire a été soumis (s'il y a eu soumission des données), il va modifier l'entité `$recipe` en remplissant ses champs avec les données provenant du formulaire
+
+```php
+    #[Route('/recettes/{id}/edit', name: 'recipe.edit')]
+    public function edit(Recipe $recipe, Request $request)
+    {
+        $form = $this->createForm(RecipeType::class, $recipe);
+        $form->handleRequest($request);
+
+        return $this->render('recipe/edit.html.twig', [
+            'recipe' => $recipe,
+            'form' => $form
+        ]);
+    }
+```
+
+**En résumé** :
+
+Le formulaire vérifie chaque champ pour voir s'il contient une valeur. Si une valeur est présente, il appelle la méthode **set** correspondante sur notre entité `$recipe`
+
+La méthode `handleRequest` agit comme si nous avions appelé les méthodes setTitle(), setContent() ... pour tous les champs listés dans le fichier `Form\RecipeType.php`. Elle gère la soumission des données du formulaire et les associe à l'entité `$recipe`.
+
+##### Vérification de la soumission du formulaire
+
+- Pour vérifier si le formulaire a été envoyé, on utilise la méthode `isSubmitted()`
+- Pour vérifier si le formulaire est valide (si les données soumises sont conformes aux règles de validation) on utilise la méthode `isValid()`
+
+##### Sauvegarde des modifications
+Si on souhaite sauvegarder les modifications apportées à l'entité, on utilise la méthode `flush()` sur l'`EntityManager.` 
+
+Pour cela on passe en paramètre de la méthode `edit` l'`EntityManager Interface $em`. 
+
+Ensuite on pourra rediriger l'utilisateur vers une nouvelle route.
+
+```php
+    #[Route('/recettes/{id}/edit', name: 'recipe.edit')]
+    public function edit(Recipe $recipe, Request $request, EntityManagerInterface $em)
+    {
+        $form = $this->createForm(RecipeType::class, $recipe);
+        $form->handleRequest($request);
+
+        if ($form->isSubmitted() && $form->isValid()) {
+            $em->flush();
+            $this->addFlash(
+               'success',
+               'La recette a bien été modifiée !'
+            );
+            return $this->redirectToRoute('recipe.index');
+        }
+
+        return $this->render('recipe/edit.html.twig', [
+            'recipe' => $recipe,
+            'form' => $form
+        ]);
+    }
+
+```
+
+### Affichage d'un message flash
+
+Un **message flash** est un moyen de stocker temporairement un message dans la session de l'utilisateur. 
+Ce message ne sera utilisé que pour la prochaine requête et sera automatiquement effacé après cela. 
+Cela permet de transmettre des informations importantes ou des notifications à l'utilisateur sans qu'elles persistent dans la session.
+
+On utilisera la méthode `addFlash()` qui est disponible dans le `AbstractController`.
+On précisera en premier paramètre le type, et en second le message
+
+```php
+$this->$this->addFlash(
+    'success',
+    'La recette a bien été modifiée !'
+);
+```
+
+Ensuite on va éditer notre vue `templates\base.html.twig` et ajouter `{{ dump(app.flashes) }}`
+```php
+        <main>
+            <div class="container my-4">
+                {{ dump(app.flashes) }}
+                {% block body %}{% endblock %}
+            </div>
+        </main>
+
+```
+
+#### Création d'un template pour les messages flash
+
+On créer dans `\templates` un repertoire `partials` qui contiendra notre vue pour les alertes.
+
+partials : des bouts de vue Twig
+
+On inclut notre fichier Twig `flash.html.twig`
+
+```php
+        <main>
+            <div class="container my-4">
+                {% include "partials/flash.html.twig" %}
+                {% block body %}{% endblock %}
+            </div>
+        </main>
+```
+
+```php
+{% for type, messages in app.flashes %}
+    <div class="alert alert-{{ type }}">
+        {{ message | join('. ') }}
+    </div>
+{% endfor %}
+```
+
+**Iterating over Keys and Values** : https://twig.symfony.com/doc/3.x/tags/for.html#iterating-over-keys-and-values
+
+Join : On a un tableau de valeur et l'on peut choisir par quoi on les fusionnent
+**join** : https://twig.symfony.com/doc/3.x/filters/join.html
+
+Affiche les messages et on va les joindre par un point séparé d'un espace
+```php
+{{ message | join('. ') }}
+```
