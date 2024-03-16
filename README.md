@@ -2135,3 +2135,100 @@ On remplacera :
         ]);
     }
 ```
+
+Une manière d'obtenir un service c'est de faire par exemple ce qui est fait dans les méthodes `createForm` en accédant directement au `container`.
+Si je souhaite l'instance du `Validator`, on peut faire un `$this->container` et lui demander est-ce que tu peux me donner `get('validator')` le service correspondant à la validation (on peut se référer au debug:autowiring), c'était l'alias `validator`.
+
+> [!NOTE]
+> Ce `container` n'est accessible que dans les contrôleurs qui `extends AbstractController`
+
+```php
+    #[Route('/recettes', name: 'recipe.index')]
+    public function index(): Response
+    {
+        dd($this->container->get('validator'));
+        $recipes = $this->repository->findWithDurationLowerThan(20);
+
+        return $this->render('recipe/index.html.twig', [
+            'recipes' => $recipes
+        ]);
+    }
+```
+
+```shell
+$ php bin/console debug:autowiring valid
+
+Autowirable Types
+=================
+
+ The following classes & interfaces can be used as type-hints when autowiring:
+ (only showing classes/interfaces matching valid)
+
+ Validates PHP values against constraints.
+ Symfony\Component\Validator\Validator\ValidatorInterface - alias:validator
+
+ 2 more concrete services would be displayed when adding the "--all" option.
+```
+
+`dd($this->container->get('validator'))` : donne une instance du validateur mais provoque une erreur.
+
+**Erreur**
+```
+Service "validator" not found: even though it exists in the app's container, the container inside "App\Controller\RecipeController" is a smaller service locator that only knows about the "form.factory", "http_kernel", "parameter_bag", "request_stack", "router", "security.authorization_checker", "security.csrf.token_manager", "security.token_storage", "serializer", "twig" and "web_link.http_header_serializer" services. Try using dependency injection instead.
+```
+
+Cette erreur va nous permettre d'expliquer la notion de **public**. Lorsqu'on enregistre un service on a la possibilité de préciser s'il est `public` ou non. S'il est `public` il va être accessible dans le `container`.
+
+Exemple : le form.factory est un service qui est public, donc lorsqu'on l'utilise on peut l'obtenir
+```php
+dd($this->container->get('form.factory'));
+```
+
+Par contre le `validator` n'est pas `public`, il ne peut pas être accessible directement depuis le `container`. C'est ce qu'indique l'erreur, on ne peut y accéder que lorsqu'on fait une construction `__construct` il peut être automatiquement injecté mais il ne peut pas être récupé de cette manière.
+
+> [!NOTE]
+> De manière générale il est déconseillé d'utiliser le `container`, il est utilisé en interne sur Symfony pour quelques éléments pratiques comme par exemple le `form.factory` et `render`. On préféra utiliser l'injection car ça permet de mieux comprendre les dépendances qui sont liées à une action (méthode), de quoi l'action à besoin pour fonctionner, ça sera intéressant dans le cadre des tests.
+
+Pour le formulaire d'édition de recette on va injecter le `FormFactoryInterface`
+
+On pourrait remplacer :
+```php
+    public function edit(
+        Recipe $recipe, 
+        Request $request, 
+        EntityManagerInterface $em)
+    {
+        $form = $this->createForm(RecipeType::class, $recipe);
+```
+Par :
+```php
+    public function edit(
+        Recipe $recipe, 
+        Request $request, 
+        EntityManagerInterface $em, 
+        FormFactoryInterface $formFactory)
+    {
+
+        $form = $formFactory->create(RecipeType::class, $recipe);
+```
+
+#### En résumé
+
+Symfony est un gros container qui va contenir plein de services préconfigurés qui vont nous permettre de travailler plus rapidement.
+
+Lorsqu'on a installé la partie squelette de Symfony `composer create-project symfony/skeleton:"7.0.*" my_project_directory` et qu'on avait pas fait le `composer require webapp`. C'est ce que l'on a, on a le container de Symfony qui est casiment vide avec juste les fonctionnalités de base. Lorsqu'on a installé webapp il a rajouté toutes les dépendances qui sont venu remplir notre container avec des éléments utiles. C'est ce qui permet d'être un framework complet dans le cadre de la création d'application web.
+
+#### A retenir
+Lorsqu'on a besoin de fonctionnalité particulières on peut se reposer sur des classes qui proviennent de Symfony. Ces classes sont enregistrées sous forme de service dans le service **container**, mais on a pas besoin d'intéragir directement avec lui on peut utiliser le système d'injection qui se fait à la fois au niveau des actions (méthodes) et aussi au niveau des constructeurs.
+Si plus tard on souhaite créer des classes on peut les créer dans notre namespace **App**, on peut les placer ou on le souhaite et on peut utiliser dans leur constructeur des éléments qui proviennent du container de service et automatiquement lorsque l'on va les utiliser dans nos actions ou dans d'autres classes ça va être hydrater correctement grâce à ce système d'**autowiring**
+
+> [!NOTE]
+> La plupart du temps ce sont des **singletons** qui sont renvoyés c'est à dire que l'EntityManager que j'utilise ça va être le même qui est utilisé en constructions dans d'autres classes.
+
+**hydrater** : signifie associer un objet (ou une classe) avec des données provenant d'une source externe, comme une base de données. L'hydratation consiste à remplir les propriétés d'un objet avec les valeurs correspondantes provenant de ces données.
+
+Exemple : Lorsqu'on récupères des informations d'un utilisateur depuis une base de données, on hydrate l'objet représentant cet utilisateur avec les valeurs appropriées (nom, prénom, adresse, etc.)
+
+**singleton** : c'est un patron de conception (design pattern) qui garantit qu'une classe possède une seule instance tout au long de l'exécution de l'application. Il permet d'accéder à cette instance depuis n'importe quel endroit du code.
+
+Exemple : Si on a une classe de gestion de configuration qui stocke des paramètres globaux pour une application, on peut la concevoir comme un singleton. Ainsi, il n'existera qu'une seule instance de cette classe, et on pourra y accéder facilement depuis n'importe quel autre composant de l'application
