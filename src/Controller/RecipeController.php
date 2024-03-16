@@ -2,7 +2,6 @@
 
 namespace App\Controller;
 
-use App\Demo;
 use App\Entity\Recipe;
 use App\Form\RecipeType;
 use App\Repository\RecipeRepository;
