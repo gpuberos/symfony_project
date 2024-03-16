@@ -2,6 +2,7 @@
 
 namespace App\Controller;
 
+use App\Demo;
 use App\Entity\Recipe;
 use App\Form\RecipeType;
 use App\Repository\RecipeRepository;
@@ -13,10 +14,15 @@ use Symfony\Component\Routing\Attribute\Route;
 
 class RecipeController extends AbstractController
 {
-    #[Route('/recettes', name: 'recipe.index')]
-    public function index(RecipeRepository $repository): Response
+    public function __construct(private RecipeRepository $repository)
     {
-        $recipes = $repository->findWithDurationLowerThan(20);
+        
+    }
+
+    #[Route('/recettes', name: 'recipe.index')]
+    public function index(): Response
+    {
+        $recipes = $this->repository->findWithDurationLowerThan(20);
 
         return $this->render('recipe/index.html.twig', [
             'recipes' => $recipes
@@ -24,9 +30,9 @@ class RecipeController extends AbstractController
     }
 
     #[Route('/recettes/{slug}-{id}', name: 'recipe.show', requirements: ['id' => '\d+', 'slug' => '[a-z0-9-]+'])]
-    public function show(string $slug, int $id, RecipeRepository $repository): Response
+    public function show(string $slug, int $id): Response
     {
-        $recipe = $repository->find($id);
+        $recipe = $this->repository->find($id);
         // Si le recipe est différent de celui qu'on a reçu dans l'url dans ce cas on fait une redirection
         if ($recipe->getSlug() !== $slug) {
             return $this->redirectToRoute('recipe.show', ['slug' => $recipe->getSlug(), 'id' => $recipe->getId()]);

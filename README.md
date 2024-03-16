@@ -1843,3 +1843,295 @@ On ne travaillera plus avec des null et ça permettra d'éviter des erreurs par 
         return $this->content;
     }
 ```
+
+## Les services
+
+Comment ça fonctionne ?
+
+Au coeur du framework on a un système de container, c'est une sorte de gros objet qui va contenir l'ensemble des classes dont on a besoin et qui va aussi contenir les méthodes qui vont permettre de les construire.
+
+Un container c'est une classe qui va contenir des clés et pour chaque clé on va avoir une fonction qui va permettre de construire le service dont on a besoin d'instancier si vous voulez le classe dont en a besoin.
+
+Cette commande va nous montrer l'ensemble des classes qui sont disponible dans le système de container de Symfony :
+```shell
+php bin/console debug:autowiring
+
+```
+
+Si on cherche une classe en particulier, on tape la même commande en rajoutant un nom
+```shell
+php bin/console debug:autowiring form
+
+```
+
+Exemple : on a envie de valider les données mais en dehors d'un système de formulaire , on peut chercher tout ce qui contient valide
+```shell
+$ php bin/console debug:autowiring valid
+
+Autowirable Types
+=================
+
+ The following classes & interfaces can be used as type-hints when autowiring:
+ (only showing classes/interfaces matching valid)
+
+ Validates PHP values against constraints.
+ Symfony\Component\Validator\Validator\ValidatorInterface - alias:validator
+
+ 2 more concrete services would be displayed when adding the "--all" option.
+```
+On a un alias validator `alias:validator` et on nous donne l'interface qui correspond `Symfony\Component\Validator\Validator\ValidatorInterface` ce qui fait que dans une action de mon contrôleur si j'injecte cette interface, il va être capable de résoudre le service qui implémente cette interface de manière automatique
+
+
+On créer une fonction demo, on crée la route qui correspond `#[Route('/demo')]` au niveau de ce demo j'attend en premier paramètre quelque chose qui va implémenter la `ValidatorInterface`. C'est cette interface là que j'avais dans la liste des services et on sauvegarde ça dans une variable `$validator`
+
+`src\Controller\RecipeController.php`
+```php
+    use Symfony\Component\Validator\Validator\ValidatorInterface;
+
+    #[Route('/demo')]
+    public function demo(ValidatorInterface $validator)
+    {
+        dd($validator);
+    }
+
+```
+
+Si l'on va sur `localhost:8000/demo`, il va me donner une instance de mon validateur.
+```
+RecipeController.php on line 21:
+Symfony\Component\Validator\Validator\TraceableValidator {#4276 ▼
+  -validator: Symfony\Component\Validator\Validator\RecursiveValidator {#1483 ▶}
+  -collectedData: []
+}
+```
+Le système de container sait que pour cette interface là il va falloir instancier la classe `TraceableValidator`
+Après on peut l'utiliser
+On instancie une nouvelle Recipe `$recipe = new Recipe()`.
+On va faire un Validator et on va lui demander est-ce que tu peux me valider ma recette `validate($recipe)`.
+
+La méthode `validate()` va nous renvoyer une liste d'erreur. On va sauvegarder ça dans une variable `$errors`. Et on va afficher les erreurs sous forme de chaîne de caractères `dd((string)$errors)`
+
+`src\Controller\RecipeController.php`
+```php
+    use Symfony\Component\Validator\Validator\ValidatorInterface;
+
+    #[Route('/demo')]
+    public function demo(ValidatorInterface $validator)
+    {
+        $recipe = new Recipe();
+        $errors = $validator->validate($recipe);
+        dd((string)$errors);
+    }
+```
+
+En résumé : On a injecté un service à la volée `ValidatorInterface` qui me permet de faire un traitement particulier.
+
+### Résolution de classe `namespace App`
+
+Symfony va être capable de faire cette résolution pour les classes qui proviennent de notre `namespace App`
+
+A la racine du dossier `src` on crée une nouvelle classe `Demo.php`
+`src\Demo.php`
+```php
+<?php
+
+namespace App;
+
+class Demo
+{
+    
+}
+
+```
+
+Je veux avoir une instance de `Demo`, il a automatiquement fourni une instance de la classe `Demo`
+
+`src\Controller\RecipeController.php`
+```php
+use App\Demo;
+
+#[Route('/demo')]
+public function demo(Demo $demo)
+{
+    dd($demo);
+}
+```
+
+Pour faire celà automatiquement
+
+Dans le dossier `config` on a un fichier qui s'appelle `services.yaml`. Ce fichier va permettre d'enregistrer des services. 
+
+> [!IMPORTANT]
+> Un **service** c'est une class que l'on va pouvoir ensuite brancher de manière automatique dans nos contrôleurs.
+
+`config\services.yaml`
+```php
+# This file is the entry point to configure your own services.
+# Files in the packages/ subdirectory configure your dependencies.
+
+# Put parameters here that don't need to change on each machine where the app is deployed
+# https://symfony.com/doc/current/best_practices.html#use-parameters-for-application-configuration
+parameters:
+
+services:
+    # default configuration for services in *this* file
+    _defaults:
+        autowire: true      # Automatically injects dependencies in your services.
+        autoconfigure: true # Automatically registers your services as commands, event subscribers, etc.
+
+    # makes classes in src/ available to be used as services
+    # this creates a service per class whose id is the fully-qualified class name
+    App\:
+        resource: '../src/'
+        exclude:
+            - '../src/DependencyInjection/'
+            - '../src/Entity/'
+            - '../src/Kernel.php'
+
+    # add more service definitions when explicit configuration is needed
+    # please note that last definitions always *replace* previous ones
+
+```
+
+`autowire: true` : ça veut dire qu'il va être capable de manière automatique d'injecter les dépendances.
+`autoconfigure: true` : ça permet pour certaines calsses de rajouter un comportement particulier. ex: lorsqu'on crée des classes pour gérer les événements, automatiquement il va les enregister.
+
+Tout ce que est dans le namespace `App\` et qui n'est pas dans `../src/DependencyInjection/`, `../src/Entity/` et `../src/Kernel.php` va constituer un service valide.
+
+C'est pour ça que `Demo` qui est dans le namespace `App` est automatiquement enregistrée et peut être utilisé comme un service au niveau de nos contrôleurs.
+
+#### Injection de dépendances
+
+J'ai besoin d'une instance de Validator.
+
+L'autowiring va reconnaitre `ValidatorInterface` dans mon service `container` et donc quand je vais construire l'objet démo, il va pouvoir directement nous donner la bonne valeur.
+
+`src\Demo.php`
+```php
+namespace App;
+
+use Symfony\Component\Validator\Validator\ValidatorInterface;
+
+class Demo
+{
+    public function __construct(private ValidatorInterface $validator)
+    {
+        
+    }
+}
+
+```
+
+> [!WARNING]
+> Si on lui donne un paramètre (ex: clé API `string $key`), il va être bloqué lorsqu'il va essayer d'instancier cet objet car il connait le `ValidatorInterface` grâce à l'autowiring par contre la clé il ne saura pas le faire. On devra définir un nouveau service dans `services.yaml` pour gérer ce cas de figure.
+
+`src\Demo.php`
+```php
+    public function __construct(private ValidatorInterface $validator, private string $key)
+    {
+        
+    }
+```
+
+Pour palier à cela, on pourra enregistrer de nouveaux services directement dans le fichier `services.yaml`
+Comme ça lorsque le container va essayé de résoudre notre classe Demo, il va utiliser la définition dans `services.yaml` et être capable de comprendre que l'argument qui s'appelle clé doit avoir cette chaîne de caractères.
+
+`config\services.yaml`
+```php
+    # add more service definitions when explicit configuration is needed
+    # please note that last definitions always *replace* previous ones
+    App\Demo:
+        class: App\Demo
+        arguments:
+            $key: 'hello'
+
+```
+
+Là il sera capable d'instancier `Demo` avec le `ValidatorInterface` et la clé `$key` qui a été automatiquement remplie.
+
+
+**ManagerRegistry**
+
+On a le même mode de fonctionnement lorsqu'on injecte un Repository.
+
+`src\Repository\RecipeRepository.php`
+```php
+    public function __construct(ManagerRegistry $registry)
+    {
+        parent::__construct($registry, Recipe::class);
+    }
+```
+On a un constructeur `__construct` qui a besoin du `ManagerRegistry`
+
+On regarde à quoi il correspond en faisant un debug:autowiring
+```shell
+$ php bin/console debug:autowiring ManagerRegistry
+
+Autowirable Types
+=================
+
+ The following classes & interfaces can be used as type-hints when autowiring:
+ (only showing classes/interfaces matching ManagerRegistry)
+
+ Doctrine\Common\Persistence\ManagerRegistry - alias:doctrine
+
+ Contract covering object managers for a Doctrine persistence layer ManagerRegistry class to implement.
+ Doctrine\Persistence\ManagerRegistry - alias:doctrine
+
+ 1 more concrete service would be displayed when adding the "--all" option.
+```
+
+`ManagerRegistry` est un service reconnu par Symfony, et Symfony va automatiquement l'injecter. C'est ce qui permet de se connecter à la base de données et de récupérer des informations.
+
+##### Autowiring (cablage automatique)
+
+L'`autowiring` fonctionne à 2 endroits :
+
+
+1. Il fonctionne sur un service qui est injecté sur le container.
+
+Comme ci-dessous dans une construction `__construct` ou on a injecté des éléments `ValidatorInterface` provenant de notre service `container`
+
+`src\Demo.php`
+```php
+public function __construct(private ValidatorInterface $validator)
+```
+
+2. Il fonctionne aussi automatiquement dans les contrôleurs
+Dans un contrôleur lorsqu'on crée une action (une méthode) on a la possibilité d'injecter autant de services que l'on souhaite. On peut le faire au niveau de la méthode.
+
+`src\Controller\RecipeController.php`
+```php
+    #[Route('/demo')]
+    public function demo(Demo $app)
+    {
+
+    }
+```
+
+> [!IMPORTANT] 
+> Si on a plusieurs méthodes qui ont besoin de la même chose, on définira un constructeur `__construct` et je le déclare comme propriété privée `private` à l'intérieur de mon contrôleur. Ce qui permet d'accéder au Repository quand on le souhaite, et on y accèdera comme une instance.
+
+```php
+    public function __construct(private RecipeRepository $repository)
+    {
+        
+    }
+```
+
+On remplacera :
+- `public function index(RecipeRepository $repository): Response` par `public function index(): Response`
+- `$recipes = $repository->findWithDurationLowerThan(20)` par `$recipes = $this->repository->findWithDurationLowerThan(20)` car on y accède comme une instance.
+
+
+```php
+    #[Route('/recettes', name: 'recipe.index')]
+    public function index(): Response
+    {
+        $recipes = $this->repository->findWithDurationLowerThan(20);
+
+        return $this->render('recipe/index.html.twig', [
+            'recipes' => $recipes
+        ]);
+    }
+```
