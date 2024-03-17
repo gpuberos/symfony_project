@@ -12,6 +12,7 @@
 		<thead>
 			<tr>
 				<th>Titre</th>
+				<th>Catégorie</th>
 				<th style="width: 200px">Actions</th>
 
 			</tr>
@@ -22,6 +23,7 @@
 					<td>
 						<a href="{{ path('admin.recipe.edit', {id: recipe.id}) }}">{{ recipe.title }}</a>
 					</td>
+					<td>{{ recipe.category.name | default('') }}</td>
 					<td>
 						<div class="d-flex gap-1">
 							<a href="{{ path('admin.recipe.edit', {id: recipe.id}) }}" class="btn btn-primary btn-sm">Editer</a>

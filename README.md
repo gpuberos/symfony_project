@@ -3246,3 +3246,626 @@ class FormListenerFactory
     }
 }
 ```
+
+## ORM : relation ManyToOne
+
+### Création de la relation ManyToOne
+
+C'est sur les recettes qu'on souhaite rajouter les catégories
+
+```shell
+$ php bin/console make:entity Recipe
+ Your entity already exists! So let's add some new fields!
+```
+
+Nom de la propriété : `category`
+```shell
+ New property name (press <return> to stop adding fields):
+ > category
+ ```
+
+Au niveau du type on lui indique que ça va être une `relation`
+```shell
+ Field type (enter ? to see all types) [string]:
+ > relation
+relation
+```
+
+Il nous demande alors à quel entité va être lié notre entité `Recipe`. On lui indique que c'est lié aux catégories `Category`
+```shell
+ What class should this entity be related to?:
+ > Category
+Category
+```
+
+Il nous propose les différents type de relation
+```shell
+What type of relationship is this?
+ ------------ -----------------------------------------------------------------------
+  Type         Description
+ ------------ -----------------------------------------------------------------------
+  ManyToOne    Each Recipe relates to (has) one Category.
+               Each Category can relate to (can have) many Recipe objects.
+
+  OneToMany    Each Recipe can relate to (can have) many Category objects.
+               Each Category relates to (has) one Recipe.
+
+  ManyToMany   Each Recipe can relate to (can have) many Category objects.
+               Each Category can also relate to (can also have) many Recipe objects.
+
+  OneToOne     Each Recipe relates to (has) exactly one Category.
+               Each Category also relates to (has) exactly one Recipe.
+ ------------ -----------------------------------------------------------------------
+ ```
+
+ManyToOne : chaque recette a une catégorie par contre chaque catégorie peut avoir plusieurs recettes.
+
+```shell
+ Relation type? [ManyToOne, OneToMany, ManyToMany, OneToOne]:
+ > ManyToOne
+ManyToOne
+```
+
+Est ce qu'on autorise les recettes à avoir des catégories null (on dirait non si on avait pas déjà rempli les catégories). Donc on peut avoir des recettes sans catégorie.
+```shell
+ Is the Recipe.category property allowed to be null (nullable)? (yes/no) [yes]:
+ > yes
+ ```
+
+Est ce que l'on veut ajouter une nouvelle propriété sur catégorie ? C'est à dire rajouter la relation inverse. Depuis une catégorie on aura la possibilité de récupérer les recettes. 
+```shell
+ Do you want to add a new property to Category so that you can access/update Recipe objects from it - e.g. $category->getRecipes()? (yes/no) [
+yes]:
+ > yes
+ A new property will also be added to the Category class so that you can access the related Recipe objects from it.
+```
+
+Il nous demande de choisir le nom de ce champ dans l'entité catégorie
+```shell
+ New field name inside Category [recipes]:
+ >
+
+ updated: src/Entity/Recipe.php
+ updated: src/Entity/Category.php
+
+ Add another property? Enter the property name (or press <return> to stop adding fields):
+ >
+
+
+ 
+  Success! 
+ 
+
+ Next: When you're ready, create a migration with php bin/console make:migration
+```
+
+### Modification apporté à l'entité Recipe
+
+Il a ajouter à l'entité `Entity\Recipe.php`
+
+```php
+    #[ORM\ManyToOne(inversedBy: 'recipes')]
+    private ?Category $category = null;
+```
+
+Il a d'abord ajouté une nouvelle propriété privée `Category` qui peut être null et il nous a rajouté au dessus un attribut pour expliquer à l'ORL que c'est une relation `ManyToOne` qui est inversée par `recipes`.
+
+Et il nous a crée le getter et le setter
+```php
+    public function getCategory(): ?Category
+    {
+        return $this->category;
+    }
+
+    public function setCategory(?Category $category): static
+    {
+        $this->category = $category;
+
+        return $this;
+    }
+```
+
+### Modification apporté à l'entité Category
+
+Au niveau de catégorie `Category.php` là ou il a fait la relation inverse.
+
+```php
+    #[ORM\OneToMany(targetEntity: Recipe::class, mappedBy: 'category')]
+    private Collection $recipes;
+```
+Une propriété privée, le type est de type `Collection`, c'est un objet qui provient de doctrine (une collection est une sorte de tableau amélioré sur lesquels on aura des méthodes intéressantes, mais ça peut être utilisé comme un tableau).
+
+Au dessus il y a notre attribut
+
+Dès la construction de l'objet il va initialiser cette propriété `recipes` comme une collection vide `ArrayCollection()`. Il fait ça pour qu'on ait toujours quelque chose de type collection à l'intérieur de la variable `$recipes`
+```php
+    public function __construct()
+    {
+        $this->recipes = new ArrayCollection();
+    }
+```
+
+Il a crée plusieurs méthodes :
+- `getRecipes()` : permet de récupérer l'ensemble des recettes.
+- `addRecipe()` : permet d'ajouter une recette. Cette méthode va prendre notre Collection et utiliser la méthode `add()` pour ajouter notre recette, mais en même temps elle va en profiter pour modifier la recette et l'attacher à la catégorie associée.
+- `removeRecipe()` : permet de supprimer une recette, ça prend la recette et ça lui dit au fait la catégorie est null. 
+
+ça s'assure que l'objet recette que l'on attache à cette catégorie est bien initialisé convenablement.
+
+
+```php
+    /**
+     * @return Collection<int, Recipe>
+     */
+    public function getRecipes(): Collection
+    {
+        return $this->recipes;
+    }
+
+    public function addRecipe(Recipe $recipe): static
+    {
+        if (!$this->recipes->contains($recipe)) {
+            $this->recipes->add($recipe);
+            $recipe->setCategory($this);
+        }
+
+        return $this;
+    }
+
+    public function removeRecipe(Recipe $recipe): static
+    {
+        if ($this->recipes->removeElement($recipe)) {
+            // set the owning side to null (unless already changed)
+            if ($recipe->getCategory() === $this) {
+                $recipe->setCategory(null);
+            }
+        }
+
+        return $this;
+    }
+```
+
+#### Test
+On teste `http://localhost:8000/admin/recettes/`
+
+Si on souhaite attacher `'pates-bolognaises'` à la catégorie `'plat-principal'` on le fait avec les setters. C'est à dire qu'on va prendre `$pates` et qu'on lui assigne la catégorie en faisant `setCategory($platPrincipal)`.
+Et une fois qu'on est satisfait on utilise l'`EntityManagerInterface` pour sauvegarder.
+
+
+`RecipeController.php`
+```php
+    #[Route('/', name: 'index')]
+    public function index(CategoryRepository $categoryRepository, EntityManagerInterface $em): Response
+    {
+        $platPrincipal = $categoryRepository->findOneBy(['slug' => 'plat-principal']);
+        $pates = $this->repository->findOneBy(['slug' => 'pates-bolognaise']);
+        $pates->setCategory($platPrincipal);
+        $em->flush();
+        dd($platPrincipal);
+        
+        $recipes = $this->repository->findWithDurationLowerThan(20);
+
+        return $this->render('admin/recipe/index.html.twig', [
+            'recipes' => $recipes
+        ]);
+    }
+
+```
+
+Si l'on souhaite récupérer la catégorie dans la fonction index on mettra :
+```php
+dd($recipes[0]->getCategory());
+```
+
+```
+RecipeController.php on line 29:
+Proxies\__CG__\App\Entity\Category {#938 ▼
+  -id: 2
+  -name: ? string
+  -slug: ? string
+  -createdAt: ? ?DateTimeImmutable
+  -updatedAt: ? ?DateTimeImmutable
+  -recipes: ? Doctrine\Common\Collections\Collection
+  -lazyObjectState: 
+Symfony\Component\VarExporter\Internal
+\
+LazyObjectState {#939 ▶}
+}
+```
+
+On remarque un détail intéressant, il ne nous donne pas un objet de type Category et il ne nous donnera pas forcément le même objet si on fait ça (peux tu me donner le nom `getName()`. 
+
+```php
+$recipes[1]->getCategory()->getName();
+dd($recipes[1]->getCategory());
+```
+
+```
+RecipeController.php on line 30:
+Proxies\__CG__\App\Entity\Category {#938 ▼
+  -id: 2
+  -name: "Plat principal"
+  -slug: "plat-principal"
+  -createdAt: DateTimeImmutable @1710701512 {#951 ▶}
+  -updatedAt: DateTimeImmutable @1710701512 {#862 ▶}
+  -recipes: 
+Doctrine\ORM
+\
+PersistentCollection {#764 ▶}
+  -lazyObjectState: 
+Symfony\Component\VarExporter\Internal
+\
+LazyObjectState {#939 ▶}
+}
+```
+
+Il nous donne un objet différent. C'est quelque chose que Symfony gère pour éviter de faire trop de requête SQL, par défaut lorsqu'on récupère la catégorie il ne la remplit pas, mais par contre dès qu'on va essayer d'accéder à une propriété il se dira que là il a besoin d'une propriété donc je suis obligé de faire une requête supplémentaire.
+
+> [!IMPORTANT] 
+> C'est ce qu'on appelle le problème n+1 c'est à dire que pour afficher n enregistrement on peut potentiellement avoir n + une requête. 
+
+**Pour éviter ce problème on a plusieurs solutions :**
+
+On pourra directement récupérer toutes les données dont on a besoin au niveau du query Builder.
+
+Il va falloir faire la liaison pour récupérer les catégories. Pour faire une liaison en SQL on utiliserait un LEFT JOIN sauf qu'on a pas à mettre toutes les conditions automatiquement Symfony sait les liaisons qu'il existe. Donc si on fait `->leftJoin('r.category', 'c')`. Ensuite dans le SELECT `->select('r', 'c')` on lui dit qu'on souhaite récupérer les informations concernant les recettes et les catégories.
+
+Si on réactualise la page on voit qu'on tombe à une seule requête au lieu de 4.
+
+`Repository\RecipePrepository.php`
+```php
+    /**
+     * 
+     * @param int $duration 
+     * @return array Recipe[]
+     */
+    public function findWithDurationLowerThan(int $duration): array
+    {
+        return $this->createQueryBuilder('r')
+                    ->where('r.duration <= :duration')
+                    ->orderBy('r.duration', 'ASC')
+                    ->setMaxResults(20)
+                    ->setParameter('duration', $duration)
+                    ->getQuery()
+                    ->getResult();
+    }
+```
+
+C'est aussi ce LEFT JOIN qui peut permettre de filter les choses. 
+Exemple : Je ne veux que les recettes qui sont des desserts et j'ai le Slug dessert. Vu que maintenant on a fait la liaison, on peut faire une condition supplémentaire, je veux que le Slug de ma catégorie `'c.slug'` soit égal à dessert `->andWhere('c.slug = \'dessert\'')`. Dans ce cas là il me montrerait que les recettes qui concerne les desserts.
+
+> [!NOTE]
+> En SQL c'est des simples quotes qu'il faudra échapper ex: `andWhere('c.slug = \'dessert\'')`
+
+`Repository\RecipePrepository.php`
+```php
+    public function findWithDurationLowerThan(int $duration): array
+    {
+        return $this->createQueryBuilder('r')
+                    ->select('r', 'c')
+                    ->where('r.duration <= :duration')
+                    ->orderBy('r.duration', 'ASC')
+                    ->leftJoin('r.category', 'c')
+                    ->andWhere('c.slug = \'dessert\'')
+                    ->setMaxResults(20)
+                    ->setParameter('duration', $duration)
+                    ->getQuery()
+                    ->getResult();
+    }
+```
+
+Si on a simplement l'id on pourrait dire ici je veux que `c.id` soit égal à l'id de dessert.
+
+```php
+->andWhere('c.id = 1')
+```
+
+L'inconvénient c'est qu'on fait une relation qui ne sert pas vraiment, on fait un LEFT JOIN alors qu'on utilise que l'id. On n'a malheureusement pas accès aux champs `r.category_id`, il nous dira que ce champ n'existe pas.
+
+`Repository\RecipePrepository.php`
+```php
+    public function findWithDurationLowerThan(int $duration): array
+    {
+        return $this->createQueryBuilder('r')
+                    ->where('r.duration <= :duration')
+                    ->orderBy('r.duration', 'ASC')
+                    ->andWhere('r.category_id = 1')
+                    ->setMaxResults(20)
+                    ->setParameter('duration', $duration)
+                    ->getQuery()
+                    ->getResult();
+    }
+```
+On aura une erreur. Pourtant on saite que category_id existe mais l'ORM ne parle qu'en terme de champ qui existe dans notre entité. Donc ça pourra sembler valable en SQL mais pas au niveau de Doctrine.
+
+Donc si on souhaite faire une sélection via l'id on mettre direment
+```php
+->andWhere('r.category = 1')
+```
+
+### Modifier la recette associée à un plat
+
+Documentation :
+- Choice Fields : https://symfony.com/doc/current/reference/forms/types.html#choice-fields
+- EntityType Field : https://symfony.com/doc/current/reference/forms/types/entity.html
+
+Le champ EntityType va nous permettre de spécifier une entité qui va être associé.
+
+Ajouter un champ category de type `EntityType` et on précisera différents arguments, la class (entité associé) c'est `Category` et le champ qui sera utilisé pour les options sera `name`
+```php
+->add('category', EntityType::class, [
+    'class' => Category::class,
+    'choice_label' => 'name'
+])
+```
+
+`Form\RecipeType.php`
+```php
+    public function buildForm(FormBuilderInterface $builder, array $options): void
+    {
+        $builder
+            ->add('title', TextType::class, [
+                'empty_data' => ''
+            ])
+            ->add('slug', TextType::class, [
+                'required' => false,
+            ])
+            ->add('category', EntityType::class, [
+                'class' => Category::class,
+                'choice_label' => 'name'
+            ])
+            ->add('content', TextareaType::class, [
+                'empty_data' => ''
+            ])
+            ->add('duration')
+            ->add('save', SubmitType::class, [
+                'label' => 'Envoyer'
+            ])
+            ->addEventListener(FormEvents::PRE_SUBMIT, $this->formListenerFactory->autoSlug('title'))
+            ->addEventListener(FormEvents::POST_SUBMIT, $this->formListenerFactory->timestamps());
+    }
+```
+
+On précisera que le choix pourra être multiple `'multiple' => true`
+
+`Form\CategoryType.php`
+```php
+    public function buildForm(FormBuilderInterface $builder, array $options): void
+    {
+        $builder
+            ->add('name', TextType::class, [
+                'empty_data' => ''
+            ])
+            ->add('slug', TextType::class, [
+                'required' => false,
+                'empty_data' => ''
+            ])
+            ->add('recipes', EntityType::class, [
+                'class' => Recipe::class,
+                'choice_label' => 'title'
+                'multiple' => true
+            ])
+            ->add('save', SubmitType::class, [
+                'label' => 'Enregistrer'
+            ])
+            ->addEventListener(FormEvents::PRE_SUBMIT, $this->formListenerFactory->autoSlug('name'))
+            ->addEventListener(FormEvents::POST_SUBMIT, $this->formListenerFactory->timestamps());
+    }
+```
+
+ça ne fonctionnera pas car il a modifié les propriétés à la volée ce qui fait que si on regarde la recette Recette de démo il n'a pas modifié la catégorie. 
+```
+CategoryController.php on line 49:
+App\Entity\Category {#655 ▼
+  -id: 1
+  -name: "Dessert"
+  -slug: "dessert"
+  -createdAt: DateTimeImmutable @1710701330 {#648 ▶}
+  -updatedAt: DateTimeImmutable @1710709832 {#1071 ▶}
+  -recipes: 
+Doctrine\ORM
+\
+PersistentCollection {#679 ▼
+    #collection: 
+Doctrine\Common\Collections
+\
+ArrayCollection {#663 ▼
+      -elements: array:2 [▼
+        0 => 
+App\Entity
+\
+Recipe {#947 ▼
+          -id: 3
+          -title: "Barbe à papa"
+          -slug: "barbe-papa"
+          -content: """
+            
+Il est indispensable pour faire de la barbe à papa de disposer d'une machine spéciale, qui peut se louer a la journée chez les spécialistes de locations de maté
+ ▶
+
+            
+
+            Mettez du sucre raffiné.
+            """
+          -createdAt: DateTimeImmutable @1710421666 {#941 ▶}
+          -updatedAt: DateTimeImmutable @1710421666 {#938 ▶}
+          -duration: 5
+          -category: 
+App\Entity
+\
+Category {#655}
+        }
+        1 => 
+App\Entity
+\
+Recipe {#1050 ▼
+          -id: 6
+          -title: "Recette de démo"
+          -slug: "recette-de-demo"
+          -content: "auto slugger test"
+          -createdAt: DateTimeImmutable @1710530789 {#1058 ▶}
+          -updatedAt: DateTimeImmutable @1710530789 {#1062 ▶}
+          -duration: 15
+          -category: null
+        }
+      ]
+    }
+    #initialized: true
+    -snapshot: array:1 [ …1]
+    -owner: 
+App\Entity
+\
+Category {#655}
+    -association: 
+Doctrine\ORM\Mapping
+\
+OneToManyAssociationMapping {#599 …}
+    -backRefFieldName: "category"
+    -isDirty: true
+    -em: 
+ContainerEvR7nLh
+\
+EntityManagerGhostEbeb667 {#230 …12}
+    -typeClass: 
+Doctrine\ORM\Mapping
+\
+ClassMetadata {#657 …}
+  }
+}
+```
+
+> [!IMPORTANT]
+> Il faudra mettre un autre attribut lorsqu'on fait ce type de champ. (Par défaut il modifie la collection directement).
+> Dans notre objet Entity\Category.php ce sont les méthodes add et remove qui sont appelées parce que ce sont ces méthodes là qui viennent modifier l'objet lorsqu'il est attaché ou détaché et qui vient mettre le setCategory convenablement. Par défaut le formulaire utilise plutôt les setters, il est donc important de faire ce **by_reference** à **false** lorsqu'on a des relations de type **ManyToMany** ou **OneToMany** à modifier.
+
+Documentation :
+- by_reference : https://symfony.com/doc/current/reference/forms/types/choice.html#by-reference
+
+Par défaut le `by_reference` est à `true` et s'attend à avoir une méthode `setAuthor()`. Si on met le `by_reference` à `false` dans ce cas là il utilisera plutôt les méthodes `add()` et `remove()`. Dans notre cas c'est la méthode `add()`
+
+`Form\CategoryType.php`
+```php
+    public function buildForm(FormBuilderInterface $builder, array $options): void
+    {
+        $builder
+            ->add('name', TextType::class, [
+                'empty_data' => ''
+            ])
+            ->add('slug', TextType::class, [
+                'required' => false,
+                'empty_data' => ''
+            ])
+            ->add('recipes', EntityType::class, [
+                'class' => Recipe::class,
+                'choice_label' => 'title',
+                'multiple' => true,
+                'by_reference' => false
+            ])
+            ->add('save', SubmitType::class, [
+                'label' => 'Enregistrer'
+            ])
+            ->addEventListener(FormEvents::PRE_SUBMIT, $this->formListenerFactory->autoSlug('name'))
+            ->addEventListener(FormEvents::POST_SUBMIT, $this->formListenerFactory->timestamps());
+    }
+```
+
+`Entity\Category.php`
+```php
+    public function addRecipe(Recipe $recipe): static
+    {
+        if (!$this->recipes->contains($recipe)) {
+            $this->recipes->add($recipe);
+            $recipe->setCategory($this);
+        }
+
+        return $this;
+    }
+
+    public function removeRecipe(Recipe $recipe): static
+    {
+        if ($this->recipes->removeElement($recipe)) {
+            // set the owning side to null (unless already changed)
+            if ($recipe->getCategory() === $this) {
+                $recipe->setCategory(null);
+            }
+        }
+
+        return $this;
+    }
+```
+
+On aura la possibilité de changer le format de ce champ `expanded` pour faire en sorte que ce soit des checkbox
+
+Documentation :
+- expanded : https://symfony.com/doc/current/reference/forms/types/choice.html#expanded
+
+On retira le champ recipes car il ne sera pas adapté à notre projet de milliers de recettes.
+
+`Form\CategoryType.php`
+```php
+            ->add('recipes', EntityType::class, [
+                'class' => Recipe::class,
+                'choice_label' => 'title',
+                'multiple' => true,
+                'expanded' => true,
+                'by_reference' => false
+            ])
+```
+
+### Persistance en cascade
+
+On va prendre notre première recette et on va créer à la volée une nouvelle catégorie.
+
+`RecipeController.php`
+```php
+    #[Route('/', name: 'index')]
+    public function index(CategoryRepository $categoryRepository, EntityManagerInterface $em): Response
+    {
+
+        $recipes = $this->repository->findWithDurationLowerThan(20);
+        $category = (new Category())
+            ->setCreatedAt(new \DateTimeImmutable())
+            ->setUpdatedAt(new \DateTimeImmutable())
+            ->setName('demo')
+            ->setName('demo');
+        $em->persist($category);
+        $recipes[0]->setCategory($category);
+        $em->flush();
+        return $this->render('admin/recipe/index.html.twig', [
+            'recipes' => $recipes
+        ]);
+    }
+```
+Sans le persist($category) on aurait une erreur. Il nous dira qu'il a trouvé une nouvelle entité à travers la relation mais qu'elle n'a pas été persistée. Pour éviter cette erreur on pourrait mettre `$em->persist($category);` directement dans le contrôleur.
+
+L'autre solution c'est de rajouter une propriété au niveau des relations. Donc dans notre modèle Recipe on lui dira je veux qu'en cascade tu fasses de la persistance `cascade: ['persist']`. Si il reçoit un nouvel objet et que c'est objet n'est pas persisté il le persistera de manière automatique.
+
+`Entity\Recipe.php`
+```php
+    #[ORM\ManyToOne(inversedBy: 'recipes', cascade: ['persist'])]
+    private ?Category $category = null;
+```
+
+Si maintenant on supprime une catégorie on tombera sur une erreur. Il nous dira qu'il ne pas la supprimer car il y a une contrainte de clé étrangère.
+
+Donc au niveau de notre class Category lui dire que lorsqu'on a une suppression de catégorie on veut qu'en cascade il aille supprimer les recettes associées. Dans ce cas là quand on supprimera une catégorie il fera aussi un remove au niveau de l'Entity Manager ce qui fait que lorsqu'on fera un flush il supprimera à la fois les recettes et les catégories associées.
+
+`Entity\Category.php`
+```php
+    #[ORM\OneToMany(targetEntity: Recipe::class, mappedBy: 'category', cascade: ['remove'])]
+    private Collection $recipes;
+```
+
+### Aller plus loin (Relations)
+
+**Orphan Removal** : permet de supprimer automatiquement un élément lorsqu'il devient orphelin.
+
+**Documentations :**
+- Transitive persistence / Cascade Operations : https://www.doctrine-project.org/projects/doctrine-orm/en/3.1/reference/working-with-associations.html#transitive-persistence-cascade-operations
+- Orphan Removal : https://www.doctrine-project.org/projects/doctrine-orm/en/3.1/reference/working-with-associations.html#orphan-removal
+
+### En résumé :
+
+Si on veut avoir une relation entre des données de modifier l'entité et d'utiliser le type relation ensuite Symfony nous guide pour définir cette relation. Il va automatiquement créer les méthodes qui vont nous permettre d'associer des données ensemble et ensuite on pourra manipuler des objets pour sauvegarder et modifier les relations qu'il y a entre les objets. Ensuite lors de la récupération des informations soit on fait une récupération classique et dans ce cas là il génère automatiquement des requêtes SQL quand il en a besoin mais si on a besoin de faire des requêtes plus compliquées, il faudra faire les choses en SQL, on utilisera les systèmes de LEFT JOIN et on pourra automatiquement récupérer les résultats qui nous intéressent (il est important de comprendre les relations qui sont faites).
+
+On a vu également comment modifier les formulaires pour faire en sorte que ces relations soient sauvegardées automatiquement et on a vu le système de cascade et de orphan removal qui nous permet de gérer la suppression ou la création en cascade.

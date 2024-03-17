@@ -2,6 +2,7 @@
 
 namespace App\Controller\Admin;
 
+use App\Entity\Category;
 use App\Entity\Recipe;
 use App\Form\RecipeType;
 use App\Repository\RecipeRepository;
@@ -23,7 +24,6 @@ class RecipeController extends AbstractController
     public function index(): Response
     {
         $recipes = $this->repository->findWithDurationLowerThan(20);
-
         return $this->render('admin/recipe/index.html.twig', [
             'recipes' => $recipes
         ]);
