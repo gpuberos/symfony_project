@@ -2232,3 +2232,425 @@ Exemple : Lorsqu'on récupères des informations d'un utilisateur depuis une bas
 **singleton** : c'est un patron de conception (design pattern) qui garantit qu'une classe possède une seule instance tout au long de l'exécution de l'application. Il permet d'accéder à cette instance depuis n'importe quel endroit du code.
 
 Exemple : Si on a une classe de gestion de configuration qui stocke des paramètres globaux pour une application, on peut la concevoir comme un singleton. Ainsi, il n'existera qu'une seule instance de cette classe, et on pourra y accéder facilement depuis n'importe quel autre composant de l'application
+
+## Formulaire de contact
+
+Créer une page contact accessible via /contacct qui demande à l'utilisateur son nom, son email et un message
+
+On utilisera un objet `ContactFormDTO` pour représenter les données de ce formulaire (pas une entité car on ne sauvegarde pas en base de données).
+
+DTO (Data Transfert Object) : c'est un objet qui permet de représenter des données qui sont transférées.
+
+On utilisera mailpit ou maildev pour tester la réception d'email.
+
+
+
+### Modification de `messenger.yaml`
+
+Messenger est un système qui permet de gérer des files d'attente et par défaut les mails s'envoient par défaut sur messenger. Il va falloir donc modifier le fichier `config\packages\messenger.yaml` pour changer son comportement.
+
+Modifier le fichier `config\packages\messenger.yaml`
+```yaml
+            # sync: 'sync://'
+
+        routing:
+            Symfony\Component\Mailer\Messenger\SendEmailMessage: async
+            Symfony\Component\Notifier\Message\ChatMessage: async
+            Symfony\Component\Notifier\Message\SmsMessage: async
+```
+En 
+
+```yaml
+            sync: 'sync://'
+
+        routing:
+            Symfony\Component\Mailer\Messenger\SendEmailMessage: sync
+            Symfony\Component\Notifier\Message\ChatMessage: sync
+            Symfony\Component\Notifier\Message\SmsMessage: sync
+```
+
+Pour le passer de synchrone pour qu'elle ne passe pas par Messenger.
+
+### Installation de serveur mail
+
+- Maildev (nécessite NodeJs) https://maildev.github.io/maildev/
+- Mailpit (est un executable) https://github.com/axllent/mailpit/releases/
+
+Sous Windows : mettre le fichier mailpit.exe dans le dossier `\bin` de Symfony
+```shell
+C:\wamp64\www\symfony>cd bin
+
+C:\wamp64\www\symfony\bin>mailpit
+time="2024/03/17 10:03:49" level=info msg="[smtpd] starting on [::]:1025 (no encryption)"
+time="2024/03/17 10:03:49" level=info msg="[http] starting on [::]:8025"
+time="2024/03/17 10:03:49" level=info msg="[http] accessible via http://localhost:8025/"
+```
+
+Sous Linux : mettre le fichier mailpit dans le dossier `\bin` de Symfony
+Executer la commande dans le terminal
+```shell
+chmod +x bin/mailpit
+./bin/mailpit
+```
+
+Ouvrir dans le navigateur `http://localhost:8025/` pour accéder à l'interface de Mailpit.
+
+### Configuration `.env` pour l'email
+
+On configure notre environnement pour qu'il envoit les emails sur Mailpit.
+
+```shell
+###> symfony/mailer ###
+MAILER_DSN=smtp://localhost:1025
+###< symfony/mailer ###
+
+```
+
+### Création du formulaire
+
+Dans `\src` créer un répertoire pour avoir un namespace dédié `DTO`, puis créer la classe `ContactDTO`.
+
+`src\DTO\ContactDTO.php`
+```php
+<?php
+
+namespace App\DTO;
+
+class ContactDTO
+{
+    public string $name = '';
+    public string $email = '';
+    public string $message = '';
+}
+```
+
+On crée le formulaire ContactType
+
+```shell
+$ php bin/console make:form ContactType
+
+ The name of Entity or fully qualified model class name that the new form will be bound to (empty for none):
+ > \App\DTO\ContactDTO
+\App\DTO\ContactDTO
+
+ created: src/Form/ContactType.php
+
+ 
+  Success! 
+ 
+
+ Next: Add fields to your form and start using it.
+ Find the documentation at https://symfony.com/doc/current/forms.html
+```
+
+`src\Form\ContactType.php`
+```php
+namespace App\Form;
+
+use App\DTO\ContactDTO;
+use Symfony\Component\Form\AbstractType;
+use Symfony\Component\Form\FormBuilderInterface;
+use Symfony\Component\OptionsResolver\OptionsResolver;
+
+class ContactType extends AbstractType
+{
+    public function buildForm(FormBuilderInterface $builder, array $options): void
+    {
+        $builder
+            ->add('name')
+            ->add('email')
+            ->add('message')
+        ;
+    }
+
+    public function configureOptions(OptionsResolver $resolver): void
+    {
+        $resolver->setDefaults([
+            'data_class' => ContactDTO::class,
+        ]);
+    }
+}
+
+```
+
+On définit le type des champs de notre formulaire
+```php
+namespace App\Form;
+
+use App\DTO\ContactDTO;
+use Symfony\Component\Form\AbstractType;
+use Symfony\Component\Form\Extension\Core\Type\EmailType;
+use Symfony\Component\Form\Extension\Core\Type\TextareaType;
+use Symfony\Component\Form\Extension\Core\Type\TextType;
+use Symfony\Component\Form\FormBuilderInterface;
+use Symfony\Component\OptionsResolver\OptionsResolver;
+
+class ContactType extends AbstractType
+{
+    public function buildForm(FormBuilderInterface $builder, array $options): void
+    {
+        $builder
+            ->add('name', TextType::class, [
+                'empty_data' => ''
+            ])
+            ->add('email', EmailType::class, [
+            'empty_data' => ''
+            ])
+            ->add('message', TextareaType::class, [
+                'empty_data' => ''
+            ])
+        ;
+    }
+
+    public function configureOptions(OptionsResolver $resolver): void
+    {
+        $resolver->setDefaults([
+            'data_class' => ContactDTO::class,
+        ]);
+    }
+}
+```
+
+On crée le contrôleur `ContactController`
+```shell
+$ php bin/console make:controller ContactController
+ created: src/Controller/ContactController.php
+ created: templates/contact/index.html.twig
+
+ 
+  Success! 
+ 
+
+ Next: Open your new controller class and add some pages!
+```
+
+`src\Controller\ContactController.php`
+```php
+namespace App\Controller;
+
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\Routing\Attribute\Route;
+
+class ContactController extends AbstractController
+{
+    #[Route('/contact', name: 'app_contact')]
+    public function index(): Response
+    {
+        return $this->render('contact/index.html.twig', [
+            'controller_name' => 'ContactController',
+        ]);
+    }
+}
+
+```
+
+#### 1er étape
+
+On créer la méthode `contact`, on génère le formulaire et son gabarit, on définit les types de champs et on ajoute une condition pour testé s'il a été envoyé et s'il est valide.
+
+`ContactController.php`
+```php
+namespace App\Controller;
+
+use App\DTO\ContactDTO;
+use App\Form\ContactType;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\Routing\Attribute\Route;
+
+class ContactController extends AbstractController
+{
+    #[Route('/contact', name: 'contact')]
+    public function contact(Request $request): Response
+    {
+        $data = new ContactDTO();
+
+        // TODO : A Supprimer (nécessaire que pour les tests de validation)
+        $data->name = 'John Doe';
+        $data->email = 'john';
+        $data->message = 'Message de John Doe';
+        
+        $form = $this->createForm(ContactType::class, $data);
+        $form->handleRequest($request);
+        if ($form->isSubmitted() && $form->isValid()) {
+            // Envoyer Email
+        }
+        return $this->render('contact/contact.html.twig', [
+            'form' => $form,
+        ]);
+        
+    }
+}
+```
+
+On définit les types de champs.
+`ContactType.php`
+```php
+namespace App\Form;
+
+use App\DTO\ContactDTO;
+use Symfony\Component\Form\AbstractType;
+use Symfony\Component\Form\Extension\Core\Type\EmailType;
+use Symfony\Component\Form\Extension\Core\Type\SubmitType;
+use Symfony\Component\Form\Extension\Core\Type\TextareaType;
+use Symfony\Component\Form\Extension\Core\Type\TextType;
+use Symfony\Component\Form\FormBuilderInterface;
+use Symfony\Component\OptionsResolver\OptionsResolver;
+
+class ContactType extends AbstractType
+{
+    public function buildForm(FormBuilderInterface $builder, array $options): void
+    {
+        $builder
+            ->add('name', TextType::class, [
+                'empty_data' => ''
+            ])
+            ->add('email', EmailType::class, [
+                'empty_data' => ''
+            ])
+            ->add('message', TextareaType::class, [
+                'empty_data' => ''
+            ])
+            ->add('save', SubmitType::class, [
+                'label' => 'Envoyer'
+            ])
+        ;
+    }
+
+    public function configureOptions(OptionsResolver $resolver): void
+    {
+        $resolver->setDefaults([
+            'data_class' => ContactDTO::class,
+        ]);
+    }
+}
+```
+
+On crée un template de formulaire plus personnalisée
+`contact.html.twig`
+```php
+{% extends 'base.html.twig' %}
+
+{% block title %}Nous contacter{% endblock %}
+
+{% block body %}
+    <h1>Nous contacter</h1>
+    {{ form_start(form) }}
+    <div class="row">
+        <div class="col-sm"> {{ form_row(form.name) }}</div>
+        <div class="col-sm">{{ form_row(form.email) }}</div>
+    </div>
+    {{ form_end(form) }}
+{% endblock %}
+```
+
+On met des contraintes au niveau des valeurs soumises.
+
+Documentation :
+- Contraints Email : https://symfony.com/doc/current/reference/constraints/Email.html
+
+`ContactDTO.php`
+```php
+
+namespace App\DTO;
+
+use Symfony\Component\Validator\Constraints as Assert;
+
+class ContactDTO
+{
+    #[Assert\NotBlank]
+    #[Assert\Length(min: 3, max: 200)]
+    public string $name = '';
+
+    #[Assert\NotBlank]
+    #[Assert\Email]
+    public string $email = '';
+
+    #[Assert\NotBlank]
+    #[Assert\Length(min: 10, max: 200)]
+    public string $message = '';
+}
+
+```
+
+#### 2eme étape : envoi d'email
+
+Documentation :
+- Sending Emails with Mailer : https://symfony.com/doc/current/mailer.html
+- Creating & Sending Messages : https://symfony.com/doc/current/mailer.html#creating-sending-messages
+- Mailer - Twig: HTML & CSS https://symfony.com/doc/current/mailer.html#twig-html-css
+- Inky Email Templating : https://symfony.com/doc/current/mailer.html#inky-email-templating-language
+- Inky : https://get.foundation/emails/docs/inky.html
+
+En plus de l'object `Request` on a besoin de la `MailerInterface`
+Mailer sert à envoyer un email mais pour représenter l'email on va devoir créer une instance de `Email`
+
+`ContactController.php`
+```php
+namespace App\Controller;
+
+use App\DTO\ContactDTO;
+use App\Form\ContactType;
+use Symfony\Bridge\Twig\Mime\TemplatedEmail;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\Mailer\MailerInterface;
+use Symfony\Component\Routing\Attribute\Route;
+
+class ContactController extends AbstractController
+{
+    #[Route('/contact', name: 'contact')]
+    public function contact(Request $request, MailerInterface $mailer): Response
+    {
+        $data = new ContactDTO();
+
+        // TODO : Supprimer ça
+        $data->name = 'John Doe';
+        $data->email = 'john@doe.fr';
+        $data->message = 'Message de John Doe';
+
+        $form = $this->createForm(ContactType::class, $data);
+        $form->handleRequest($request);
+        if ($form->isSubmitted() && $form->isValid()) {
+            $mail = (new TemplatedEmail())
+                ->to('contact@example.com')
+                ->from($data->email)
+                ->subject('Demande de contact')
+                ->htmlTemplate('emails/contact.html.twig')
+                ->context(['data' => $data]);
+            $mailer->send($mail);
+            $this->addFlash(
+                'success',
+                'Votre email a bien été envoyé'
+            );
+            $this->redirectToRoute('contact');
+        }
+        return $this->render('contact/contact.html.twig', [
+            'form' => $form,
+        ]);
+        
+    }
+}
+```
+
+On crée un gabarit pour l'email
+
+`templates\emails\contact.html.twig`
+```php
+<p>
+    Une nouvelle demande de contact a été reçue
+</p>
+
+<ul>
+    <li>Nom : {{ data.name }}</li>
+    <li>Email : {{ data.email }}</li>
+</ul>
+
+<p>
+    <strong>Message</strong>:<br>
+    {{ data.message | nl2br }}
+</p>
+```
