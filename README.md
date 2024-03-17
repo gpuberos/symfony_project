@@ -2854,3 +2854,395 @@ class ContactController extends AbstractController
 1. On crée un objet qui représente mes données, ici ce n'est pas une entité parce qu'on ne communique pas avec la base de données.
 2. On crée un formulaire grâce à la commande `php bin/console make:form ContactType` puis on le personnalise.
 3. On crée un controleur grâce à la commande `php bin/console make:controller ContactController` et on y mets les méthodes classiques `createForm()`, le `handleRequest`, le `isSubmitted()` et `isValid()` et on fait notre traitement. On injectera le service `MailerInterface` pour avoir la capacité d'envoyer un email.
+
+## Catégorie
+
+On réorganise notre application.
+
+On créer un dossier `Admin` dans le dossier `Controller`. On y met `RecipeController.php`
+
+On modifie le namespace de `RecipeController.php` comme ceci `namespace App\Controller\Admin` et on ajoute une route à la class `RecipeController`
+
+`src\Controller\Admin\RecipeController.php`
+```php
+namespace App\Controller\Admin;
+
+#[Route('admin/recettes', name: 'admin.recipe')]
+class RecipeController extends AbstractController
+{
+```
+
+```shell
+$ php bin/console debug:router
+ --------------------------- ---------- -------- ------ --------------------------------------
+  Name                        Method     Scheme   Host   Path
+ --------------------------- ---------- -------- ------ --------------------------------------
+  _preview_error              ANY        ANY      ANY    /_error/{code}.{_format}
+  _wdt                        ANY        ANY      ANY    /_wdt/{token}
+  _profiler_home              ANY        ANY      ANY    /_profiler/
+  _profiler_search            ANY        ANY      ANY    /_profiler/search
+  _profiler_search_bar        ANY        ANY      ANY    /_profiler/search_bar
+  _profiler_phpinfo           ANY        ANY      ANY    /_profiler/phpinfo
+  _profiler_xdebug            ANY        ANY      ANY    /_profiler/xdebug
+  _profiler_font              ANY        ANY      ANY    /_profiler/font/{fontName}.woff2
+  _profiler_search_results    ANY        ANY      ANY    /_profiler/{token}/search/results
+  _profiler_open_file         ANY        ANY      ANY    /_profiler/open
+  _profiler                   ANY        ANY      ANY    /_profiler/{token}
+  _profiler_router            ANY        ANY      ANY    /_profiler/{token}/router
+  _profiler_exception         ANY        ANY      ANY    /_profiler/{token}/exception
+  _profiler_exception_css     ANY        ANY      ANY    /_profiler/{token}/exception.css
+  admin.reciperecipe.index    ANY        ANY      ANY    /admin/recettes/recettes
+  admin.reciperecipe.show     ANY        ANY      ANY    /admin/recettes/recettes/{slug}-{id}
+  admin.reciperecipe.edit     GET|POST   ANY      ANY    /admin/recettes/recettes/{id}/edit
+  admin.reciperecipe.create   ANY        ANY      ANY    /admin/recettes/recettes/create
+  admin.reciperecipe.delete   DELETE     ANY      ANY    /admin/recettes/recettes/{id}
+  contact                     ANY        ANY      ANY    /contact
+  home                        ANY        ANY      ANY    /
+ --------------------------- ---------- -------- ------ --------------------------------------
+```
+
+On peut voir que la route a bien été crée
+```shell
+  admin.reciperecipe.index    ANY        ANY      ANY    /admin/recettes/recettes
+```
+
+On ajoute des requirements pour l'id pour indiquer qu'on attend que des nombres. On pourra utiliser l'enumérateur `Requirement` qui contiendra des constantes par rapport aux pré-requis des URL.
+
+```php
+namespace Symfony\Component\Routing\Requirement;
+
+/*
+ * A collection of universal regular-expression constants to use as route parameter requirements.
+ */
+enum Requirement
+{
+    public const ASCII_SLUG = '[A-Za-z0-9]+(?:-[A-Za-z0-9]+)*'; // symfony/string AsciiSlugger default implementation
+    public const CATCH_ALL = '.+';
+    public const DATE_YMD = '[0-9]{4}-(?:0[1-9]|1[012])-(?:0[1-9]|[12][0-9]|(?<!02-)3[01])'; // YYYY-MM-DD
+    public const DIGITS = '[0-9]+';
+    public const POSITIVE_INT = '[1-9][0-9]*';
+    public const UID_BASE32 = '[0-9A-HJKMNP-TV-Z]{26}';
+    public const UID_BASE58 = '[1-9A-HJ-NP-Za-km-z]{22}';
+    public const UID_RFC4122 = '[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}';
+    public const ULID = '[0-7][0-9A-HJKMNP-TV-Z]{25}';
+    public const UUID = '[0-9a-f]{8}-[0-9a-f]{4}-[13-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}';
+    public const UUID_V1 = '[0-9a-f]{8}-[0-9a-f]{4}-1[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}';
+    public const UUID_V3 = '[0-9a-f]{8}-[0-9a-f]{4}-3[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}';
+    public const UUID_V4 = '[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}';
+    public const UUID_V5 = '[0-9a-f]{8}-[0-9a-f]{4}-5[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}';
+    public const UUID_V6 = '[0-9a-f]{8}-[0-9a-f]{4}-6[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}';
+    public const UUID_V7 = '[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}';
+    public const UUID_V8 = '[0-9a-f]{8}-[0-9a-f]{4}-8[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}';
+}
+```
+
+On choisira `requirements: ['id' => Requirement::DIGITS]`
+
+On supprimera la route et la méthode pour afficher une recette car on en aura pas besoin dans l'admin.
+
+Modifier :
+- les Routes
+- les chemins des gabarits Twig que l'on mettre dans un dossier `admin`
+- les `redirectToRoute`
+
+```php
+namespace App\Controller\Admin;
+
+use App\Entity\Recipe;
+use App\Form\RecipeType;
+use App\Repository\RecipeRepository;
+use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\Routing\Attribute\Route;
+use Symfony\Component\Routing\Requirement\Requirement;
+
+#[Route('/admin/recettes', name: 'admin.recipe.')]
+class RecipeController extends AbstractController
+{
+    public function __construct(private RecipeRepository $repository)
+    {
+    }
+
+    #[Route('/', name: 'index')]
+    public function index(): Response
+    {
+        $recipes = $this->repository->findWithDurationLowerThan(20);
+
+        return $this->render('recipe/index.html.twig', [
+            'recipes' => $recipes
+        ]);
+    }
+
+    #[Route('/create', name: 'create')]
+    public function create(Request $request, EntityManagerInterface $em)
+    {
+        $recipe = new Recipe();
+        $form = $this->createForm(RecipeType::class, $recipe);
+        $form->handleRequest($request);
+        if ($form->isSubmitted() && $form->isValid()) {
+            $em->persist($recipe);
+            $em->flush();
+            $this->addFlash('success', 'La recette a bien été créée');
+            return $this->redirectToRoute('recipe.index');
+        }
+        return $this->render('recipe/create.html.twig', [
+            'formTitle' => 'Créer une nouvelle recette',
+            'form' => $form
+        ]);
+    }
+
+    #[Route('/{id}', name: 'edit', methods: ['GET', 'POST'], requirements: ['id' => Requirement::DIGITS])]
+    public function edit(Recipe $recipe, Request $request, EntityManagerInterface $em)
+    {
+        $form = $this->createForm(RecipeType::class, $recipe);
+        $form->handleRequest($request);
+
+        if ($form->isSubmitted() && $form->isValid()) {
+            $em->flush();
+            $this->addFlash(
+                'success',
+                'La recette a bien été modifiée'
+            );
+            return $this->redirectToRoute('recipe.index');
+        }
+
+        return $this->render('recipe/edit.html.twig', [
+            'recipe' => $recipe,
+            'formTitle' => 'Editer : ' . $recipe->getTitle(),
+            'form' => $form
+        ]);
+    }
+
+    #[Route('/{id}', name: 'delete', methods: ['DELETE'], requirements: ['id' => Requirement::DIGITS])]
+    public function delete(Recipe $recipe, EntityManagerInterface $em)
+    {
+        $em->remove($recipe);
+        $em->flush();
+        $this->addFlash('success', 'La recette a bien été supprimée');
+        return $this->redirectToRoute('recipe.index');
+    }
+}
+
+
+```
+
+Et on revifiera avec le `debug:router`
+```shell
+$ php bin/console debug:router
+ -------------------------- ---------- -------- ------ -----------------------------------
+  Name                       Method     Scheme   Host   Path
+ -------------------------- ---------- -------- ------ -----------------------------------
+  _preview_error             ANY        ANY      ANY    /_error/{code}.{_format}
+  _wdt                       ANY        ANY      ANY    /_wdt/{token}
+  _profiler_home             ANY        ANY      ANY    /_profiler/
+  _profiler_search           ANY        ANY      ANY    /_profiler/search
+  _profiler_search_bar       ANY        ANY      ANY    /_profiler/search_bar
+  _profiler_phpinfo          ANY        ANY      ANY    /_profiler/phpinfo
+  _profiler_xdebug           ANY        ANY      ANY    /_profiler/xdebug
+  _profiler_font             ANY        ANY      ANY    /_profiler/font/{fontName}.woff2
+  _profiler_search_results   ANY        ANY      ANY    /_profiler/{token}/search/results
+  _profiler_open_file        ANY        ANY      ANY    /_profiler/open
+  _profiler                  ANY        ANY      ANY    /_profiler/{token}
+  _profiler_router           ANY        ANY      ANY    /_profiler/{token}/router
+  _profiler_exception        ANY        ANY      ANY    /_profiler/{token}/exception
+  _profiler_exception_css    ANY        ANY      ANY    /_profiler/{token}/exception.css
+  admin.recipeindex          ANY        ANY      ANY    /admin/recettes/
+  admin.recipecreate         ANY        ANY      ANY    /admin/recettes/create
+  admin.recipeedit           GET|POST   ANY      ANY    /admin/recettes/{id}
+  admin.recipedelete         DELETE     ANY      ANY    /admin/recettes/{id}
+  contact                    ANY        ANY      ANY    /contact
+  home                       ANY        ANY      ANY    /
+ -------------------------- ---------- -------- ------ -----------------------------------
+```
+
+Création Admin\CategoryController.php
+```php
+namespace App\Controller\Admin;
+
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\Routing\Attribute\Route;
+use Symfony\Component\Routing\Requirement\Requirement;
+
+#[Route('/admin/category', name: 'admin.category.')]
+class CategoryController extends AbstractController
+{
+    #[Route('/', name: 'index')]
+    public function index()
+    {
+        
+    }
+
+    #[Route('/create', name: 'create')]
+    public function create()
+    {
+        
+    }
+
+    #[Route('/{id}', name: 'edit', methods: ['GET', 'POST'], requirements: ['id' => Requirement::DIGITS])]
+    public function edit()
+    {
+        
+    }
+
+    #[Route('/{id}', name: 'delete', methods: ['DELETE'], requirements: ['id' => Requirement::DIGITS])]
+    public function remove()
+    {
+
+    }
+}
+
+```
+
+
+Création de l'entité :
+
+```shell
+$ bin/console make:entity Category
+ created: src/Entity/Category.php
+ created: src/Repository/CategoryRepository.php
+ 
+ Entity generated! Now let's add some fields!
+ You can always add more fields later manually or by re-running this command.
+
+ New property name (press <return> to stop adding fields):
+ > name
+
+ Field type (enter ? to see all types) [string]:
+ >
+
+
+ Field length [255]:
+ >
+
+ Can this field be null in the database (nullable) (yes/no) [no]:
+ >
+
+ updated: src/Entity/Category.php
+
+ Add another property? Enter the property name (or press <return> to stop adding fields):
+ > slug
+
+ Field type (enter ? to see all types) [string]:
+ >
+
+
+ Field length [255]:
+ >
+
+ Can this field be null in the database (nullable) (yes/no) [no]:
+ >
+
+ updated: src/Entity/Category.php
+
+ Add another property? Enter the property name (or press <return> to stop adding fields):
+ > createdAt
+
+ Field type (enter ? to see all types) [datetime_immutable]:
+ >
+
+
+ Can this field be null in the database (nullable) (yes/no) [no]:
+ >
+
+ updated: src/Entity/Category.php
+
+ Add another property? Enter the property name (or press <return> to stop adding fields):
+ > updatedAt
+
+ Field type (enter ? to see all types) [datetime_immutable]:
+ >
+
+
+ Can this field be null in the database (nullable) (yes/no) [no]:
+ >
+
+ updated: src/Entity/Category.php
+
+ Add another property? Enter the property name (or press <return> to stop adding fields):
+ >
+
+
+ 
+  Success! 
+ 
+
+ Next: When you're ready, create a migration with php bin/console make:migration
+```
+
+```shell
+php bin/console make:migration
+```
+
+```shell
+php bin/console doctrine:migrations:migrate
+```
+
+On génère le formulaire :
+
+```shell
+$ php bin/console make:form CategoryType
+
+ The name of Entity or fully qualified model class name that the new form will be bound to (empty for none):
+ > Category
+Category
+
+ created: src/Form/CategoryType.php
+
+ 
+  Success! 
+ 
+
+ Next: Add fields to your form and start using it.
+ Find the documentation at https://symfony.com/doc/current/forms.html
+```
+
+### Service `FormListenerFactory`
+
+Fonction créer à la volée on n'a pas accès aux variables qui proviennent de l'extérieur il faut utiliser `use ($field)` pour cela
+
+`FormListenerFactory.php`
+```php
+namespace App\Form;
+
+use Symfony\Component\Form\Event\PostSubmitEvent;
+use Symfony\Component\Form\Event\PreSubmitEvent;
+use Symfony\Component\String\Slugger\AsciiSlugger;
+use Symfony\Component\String\Slugger\SluggerInterface;
+
+class FormListenerFactory
+{
+    public function __construct(private SluggerInterface $slugger)
+    {
+
+    }
+
+    public function autoSlug(string $field): callable
+    {
+        return function (PreSubmitEvent $event) use ($field) {
+            $data = $event->getData();
+            if (empty($data['slug'])) {
+                $data['slug'] = strtolower($this->slugger->slug($data[$field]));
+            }
+
+            $event->setData($data);
+        };
+    }
+
+    public function timestamps(): callable
+    {
+
+        return function (PostSubmitEvent $event) {
+
+            $data = $event->getData();
+
+            $data->setUpdatedAt(new \DateTimeImmutable());
+
+            if (!$data->getId()) {
+                $data->setCreatedAt(new \DateTimeImmutable());
+            }
+        };
+    }
+}
+```

@@ -70,7 +70,7 @@ class RecipeController extends AbstractController
     }
 
     #[Route('/{id}', name: 'delete', methods: ['DELETE'], requirements: ['id' => Requirement::DIGITS])]
-    public function delete(Recipe $recipe, EntityManagerInterface $em)
+    public function remove(Recipe $recipe, EntityManagerInterface $em)
     {
         $em->remove($recipe);
         $em->flush();
