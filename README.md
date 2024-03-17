@@ -2626,7 +2626,7 @@ class ContactController extends AbstractController
                 'success',
                 'Votre email a bien été envoyé'
             );
-            $this->redirectToRoute('contact');
+            return $this->redirectToRoute('contact');
         }
         return $this->render('contact/contact.html.twig', [
             'form' => $form,
@@ -2654,3 +2654,203 @@ On crée un gabarit pour l'email
     {{ data.message | nl2br }}
 </p>
 ```
+
+#### 3eme étape : ajout d'un select service
+
+Documentation :
+- Form Type : https://symfony.com/doc/current/reference/forms/types.html
+- ChoiceType : https://symfony.com/doc/current/reference/forms/types/choice.html
+
+`ContactDTO.php`
+```php
+namespace App\DTO;
+
+use Symfony\Component\Validator\Constraints as Assert;
+
+class ContactDTO
+{
+    #[Assert\NotBlank]
+    #[Assert\Length(min: 3, max: 200)]
+    public string $name = '';
+
+    #[Assert\NotBlank]
+    #[Assert\Email]
+    public string $email = '';
+
+    #[Assert\NotBlank]
+    #[Assert\Length(min: 10, max: 200)]
+    public string $message = '';
+
+    #[Assert\NotBlank]
+    public string $service = '';
+}
+```
+
+On crée le select `service`
+
+`ContactType.php`
+```php
+namespace App\Form;
+
+use App\DTO\ContactDTO;
+use Symfony\Component\Form\AbstractType;
+use Symfony\Component\Form\Extension\Core\Type\ChoiceType;
+use Symfony\Component\Form\Extension\Core\Type\EmailType;
+use Symfony\Component\Form\Extension\Core\Type\SubmitType;
+use Symfony\Component\Form\Extension\Core\Type\TextareaType;
+use Symfony\Component\Form\Extension\Core\Type\TextType;
+use Symfony\Component\Form\FormBuilderInterface;
+use Symfony\Component\OptionsResolver\OptionsResolver;
+
+class ContactType extends AbstractType
+{
+    public function buildForm(FormBuilderInterface $builder, array $options): void
+    {
+        $builder
+            ->add('name', TextType::class, [
+                'empty_data' => ''
+            ])
+            ->add('email', EmailType::class, [
+                'empty_data' => ''
+            ])
+            ->add('service', ChoiceType::class, [
+                'choices'  => [
+                    'Comptabilité' => 'compta@example.com',
+                    'Support' => 'support@example.com',
+                    'Marketing' => 'marketing@example.com',
+                ],
+            ])
+            ->add('message', TextareaType::class, [
+                'empty_data' => ''
+            ])
+            ->add('save', SubmitType::class, [
+                'label' => 'Envoyer'
+            ])
+        ;
+    }
+
+    public function configureOptions(OptionsResolver $resolver): void
+    {
+        $resolver->setDefaults([
+            'data_class' => ContactDTO::class,
+        ]);
+    }
+}
+```
+
+On lui précise vers ou envoyer, pour ça on récupère le service sélectionné `->to($data->service)`
+
+`ContactController.php`
+```php
+namespace App\Controller;
+
+use App\DTO\ContactDTO;
+use App\Form\ContactType;
+use Symfony\Bridge\Twig\Mime\TemplatedEmail;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\Mailer\MailerInterface;
+use Symfony\Component\Routing\Attribute\Route;
+
+class ContactController extends AbstractController
+{
+    #[Route('/contact', name: 'contact')]
+    public function contact(Request $request, MailerInterface $mailer): Response
+    {
+        $data = new ContactDTO();
+
+        // TODO : Supprimer ça
+        $data->name = 'John Doe';
+        $data->email = 'john@doe.fr';
+        $data->message = 'Message de John Doe';
+
+        $form = $this->createForm(ContactType::class, $data);
+        $form->handleRequest($request);
+        if ($form->isSubmitted() && $form->isValid()) {
+            $mail = (new TemplatedEmail())
+                ->to($data->service)
+                ->from($data->email)
+                ->subject('Demande de contact')
+                ->htmlTemplate('emails/contact.html.twig')
+                ->context(['data' => $data]);
+            $mailer->send($mail);
+            $this->addFlash(
+                'success',
+                'Votre email a bien été envoyé'
+            );
+            return $this->redirectToRoute('contact');
+        }
+        return $this->render('contact/contact.html.twig', [
+            'form' => $form,
+        ]);
+        
+    }
+}
+```
+
+#### 4 étape : gestion d'erreur en cas d'échec de l'envoi
+
+On utilisera un try catch
+
+`ContactController.php`
+```php
+namespace App\Controller;
+
+use App\DTO\ContactDTO;
+use App\Form\ContactType;
+use Symfony\Bridge\Twig\Mime\TemplatedEmail;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\Mailer\MailerInterface;
+use Symfony\Component\Routing\Attribute\Route;
+
+class ContactController extends AbstractController
+{
+    #[Route('/contact', name: 'contact')]
+    public function contact(Request $request, MailerInterface $mailer): Response
+    {
+        $data = new ContactDTO();
+
+        $form = $this->createForm(ContactType::class, $data);
+        $form->handleRequest($request);
+
+        if ($form->isSubmitted() && $form->isValid()) {
+            try {
+                $mail = (new TemplatedEmail())
+                    // Pour tester remplacer $data->service par une email non valide 'emailnonvalide'
+                    ->to($data->service)
+                    ->from($data->email)
+                    ->subject('Demande de contact')
+                    ->htmlTemplate('emails/contact.html.twig')
+                    ->context(['data' => $data]);
+
+                $mailer->send($mail);
+                $this->addFlash(
+                    'success',
+                    'Votre email a bien été envoyé'
+                );
+
+                return $this->redirectToRoute('contact');
+            
+            } catch (\Exception $e) {
+                $this->addFlash(
+                    'danger',
+                    'Impossible d\'envoyer votre email'
+                );
+            }
+        }
+
+        return $this->render('contact/contact.html.twig', [
+            'form' => $form,
+        ]);
+    }
+}
+```
+
+#### En résumé :
+
+1. On crée un objet qui représente mes données, ici ce n'est pas une entité parce qu'on ne communique pas avec la base de données.
+2. On crée un formulaire grâce à la commande `php bin/console make:form ContactType` puis on le personnalise.
+3. On crée un controleur grâce à la commande `php bin/console make:controller ContactController` et on y mets les méthodes classiques `createForm()`, le `handleRequest`, le `isSubmitted()` et `isValid()` et on fait notre traitement. On injectera le service `MailerInterface` pour avoir la capacité d'envoyer un email.

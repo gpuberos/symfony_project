@@ -17,4 +17,7 @@ class ContactDTO
     #[Assert\NotBlank]
     #[Assert\Length(min: 10, max: 200)]
     public string $message = '';
+
+    #[Assert\NotBlank]
+    public string $service = '';
 }
