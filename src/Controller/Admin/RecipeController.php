@@ -8,6 +8,7 @@ use App\Form\RecipeType;
 use App\Repository\RecipeRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\HttpFoundation\File\UploadedFile;
 use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
@@ -54,6 +55,11 @@ class RecipeController extends AbstractController
         $form->handleRequest($request);
 
         if ($form->isSubmitted() && $form->isValid()) {
+            /** @var UploadedFile $file */
+            $file = $form->get('thumbnailFile')->getData();
+            $filename = $recipe->getId() . '.' . $file->getClientOriginalExtension();
+            $file->move($this->getParameter('kernel.project_dir') . '/public/recettes/images', $filename);
+            $recipe->setThumbnail($filename);
             $em->flush();
             $this->addFlash(
                 'success',

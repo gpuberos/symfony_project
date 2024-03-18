@@ -5,6 +5,10 @@
 
 {% block body %}
 
-	{% include "partials/form.html.twig" %}
+	<h1>{{ recipe.title }}</h1>
 
-{% endblock %}
+	<p>
+		<img src="/recettes/images/{{ recipe.thumbnail }}" alt="">
+	</p>
+
+	{{ form(form) }}{% endblock %}

@@ -3869,3 +3869,455 @@ Donc au niveau de notre class Category lui dire que lorsqu'on a une suppression 
 Si on veut avoir une relation entre des données de modifier l'entité et d'utiliser le type relation ensuite Symfony nous guide pour définir cette relation. Il va automatiquement créer les méthodes qui vont nous permettre d'associer des données ensemble et ensuite on pourra manipuler des objets pour sauvegarder et modifier les relations qu'il y a entre les objets. Ensuite lors de la récupération des informations soit on fait une récupération classique et dans ce cas là il génère automatiquement des requêtes SQL quand il en a besoin mais si on a besoin de faire des requêtes plus compliquées, il faudra faire les choses en SQL, on utilisera les systèmes de LEFT JOIN et on pourra automatiquement récupérer les résultats qui nous intéressent (il est important de comprendre les relations qui sont faites).
 
 On a vu également comment modifier les formulaires pour faire en sorte que ces relations soient sauvegardées automatiquement et on a vu le système de cascade et de orphan removal qui nous permet de gérer la suppression ou la création en cascade.
+
+## Envoi de fichiers
+
+### Création de la propriété Thumbnail dans l'entité Recipe
+
+Création d'une propriété thumbnail dans l'entité Recipe
+```shell
+$ php bin/console make:entity Recipe
+ Your entity already exists! So let's add some new fields!
+
+ New property name (press <return> to stop adding fields):
+ > thumbnail
+
+ Field type (enter ? to see all types) [string]:
+ >
+
+
+ Field length [255]:
+ >
+
+ Can this field be null in the database (nullable) (yes/no) [no]:
+ > yes
+
+ updated: src/Entity/Recipe.php
+
+ Add another property? Enter the property name (or press <return> to stop adding fields):
+ >
+
+
+ 
+  Success! 
+ 
+
+ Next: When you're ready, create a migration with php bin/console make:migration
+```
+
+### Ajout du champ file upload dans notre formulaire :
+
+On ajoute le champ file upload `thumbnailFile`
+
+`Form\RecipeType.php`
+```php
+    public function buildForm(FormBuilderInterface $builder, array $options): void
+    {
+        $builder
+            ->add('title', TextType::class, [
+                'empty_data' => ''
+            ])
+            ->add('slug', TextType::class, [
+                'required' => false,
+            ])
+            ->add('thumbnailFile', FileType::class, [
+                'mapped' => false,
+                'constraints' => [
+                    new Image()
+                ]
+            ])
+            ->add('category', EntityType::class, [
+                'class' => Category::class,
+                'choice_label' => 'name'
+            ])
+            ->add('content', TextareaType::class, [
+                'empty_data' => ''
+            ])
+            ->add('duration')
+            ->add('save', SubmitType::class, [
+                'label' => 'Envoyer'
+            ])
+            ->addEventListener(FormEvents::PRE_SUBMIT, $this->formListenerFactory->autoSlug('title'))
+            ->addEventListener(FormEvents::POST_SUBMIT, $this->formListenerFactory->timestamps());
+    }
+```
+
+On ajoute 
+```php
+            ->add('thumbnailFile', FileType::class, [
+                'mapped' => false,
+                'constraints' => [
+                    new Image()
+                ]
+            ])
+```
+On a une erreur qui indique qu'il ne trouve pas de propriété `thumbnailFile` dans l'entité `Recipe`. On va lui indiquer que c'est un champ qui n'existe pas vraiment en mettant la propriété `mapped`  sur `false`, ça veut dire que ce champ là ne sera pas mappé dans les données qui sont interne à notre formulaire, donc dans ce cas là il ne va pas utiliser les setters pour essayer de sauvegarder cette valeur là et il n'utilisera pas les getters pour la récupérer, c'est pour indiquer que c'est un champ qui vie de sa propre manière.
+
+Documentation : 
+- File Constraints : https://symfony.com/doc/current/reference/constraints.html#file-constraints
+- Image : https://symfony.com/doc/current/reference/constraints/Image.html
+
+
+### Récupération des informations du fichier au niveau du contrôleur :
+
+On va récupérer les informations au niveau de notre contrôleur :
+Pour tester on va mettre un `dd($form->get('thumbnailFile')->getData());`
+
+```php
+    #[Route('/{id}', name: 'edit', methods: ['GET', 'POST'], requirements: ['id' => Requirement::DIGITS])]
+    public function edit(Recipe $recipe, Request $request, EntityManagerInterface $em)
+    {
+        $form = $this->createForm(RecipeType::class, $recipe);
+        $form->handleRequest($request);
+
+        if ($form->isSubmitted() && $form->isValid()) {
+            dd($form->get('thumbnailFile')->getData());
+            $em->flush();
+            $this->addFlash(
+                'success',
+                'La recette a bien été modifiée'
+            );
+            return $this->redirectToRoute('admin.recipe.index');
+        }
+
+        return $this->render('admin/recipe/edit.html.twig', [
+            'recipe' => $recipe,
+            'formTitle' => 'Editer : ' . $recipe->getTitle(),
+            'form' => $form
+        ]);
+    }
+```
+On voit que dans `getData()` on obtient une instance de `UploadedFile`. Cette classe là représente un fichier qui a été uploadé et va contenir une méthode `move()` qui va permettre de déplacer le fichier.
+
+```
+RecipeController.php on line 57:
+Symfony\Component\HttpFoundation\File\UploadedFile {#19 ▼
+  -test: false
+  -originalName: "barbe-a-papa.jpg"
+  -mimeType: "image/jpeg"
+  -error: 0
+  path: "C:\wamp64\tmp"
+  filename: "php358.tmp"
+  basename: "php358.tmp"
+  pathname: "C:\wamp64\tmp\php358.tmp"
+  extension: "tmp"
+  realPath: "
+C:\wamp64
+\
+tmp\php358.tmp"
+  aTime: 2024-03-18 08:26:52
+  mTime: 2024-03-18 08:26:52
+  cTime: 2024-03-18 08:26:52
+  inode: 20547673300282431
+  size: 15365
+  perms: 0100666
+  owner: 0
+  group: 0
+  type: "file"
+  writable: true
+  readable: true
+  executable: false
+  file: true
+  dir: false
+  link: false
+  linkTarget: "C:\wamp64\tmp\php358.tmp"
+}
+```
+
+```php
+    #[Route('/{id}', name: 'edit', methods: ['GET', 'POST'], requirements: ['id' => Requirement::DIGITS])]
+    public function edit(Recipe $recipe, Request $request, EntityManagerInterface $em)
+    {
+        $form = $this->createForm(RecipeType::class, $recipe);
+        $form->handleRequest($request);
+
+        if ($form->isSubmitted() && $form->isValid()) {
+            /** @var UploadedFile $file */
+            $file = $form->get('thumbnailFile')->getData();
+            dd($file->getClientOriginalName(), $file->getClientOriginalExtension());
+            $em->flush();
+            $this->addFlash(
+                'success',
+                'La recette a bien été modifiée'
+            );
+            return $this->redirectToRoute('admin.recipe.index');
+        }
+
+        return $this->render('admin/recipe/edit.html.twig', [
+            'recipe' => $recipe,
+            'formTitle' => 'Editer : ' . $recipe->getTitle(),
+            'form' => $form
+        ]);
+    }
+```
+
+- `getClientOriginalName()` : si on veut récupérer le nom original du fichier envoyer.
+- `getClientOriginalExtension()` : si on veut récupérer l'extension du fichier.
+
+Pour voir les valeurs associées
+```php
+dd($file->getClientOriginalName(), $file->getClientOriginalExtension());
+```
+
+```
+1 in RecipeController.php on line 60:
+"barbe-a-papa.jpg"
+
+2 in RecipeController.php on line 60:
+"jpg"
+```
+### Déplacement du fichier dans un répertoire
+
+On va déplacer le fichier dans un dossier image, on aura un sous dossier recette et on utilisera l'ID de la recette pour nommer le fichier.
+
+Sur les variables de type UploadedFile on a une méthode `move()` et qui va permettre de déplacer un élément, ça prendra en premier paramètre un dossier et en second paramètre on peut mettre un nom si on choisit de renommer le fichier, si on ne met rien ça utilisera le nom de fichier original.
+
+`RecipeController.php`
+```php
+    #[Route('/{id}', name: 'edit', methods: ['GET', 'POST'], requirements: ['id' => Requirement::DIGITS])]
+    public function edit(Recipe $recipe, Request $request, EntityManagerInterface $em)
+    {
+        $form = $this->createForm(RecipeType::class, $recipe);
+        $form->handleRequest($request);
+
+        if ($form->isSubmitted() && $form->isValid()) {
+            /** @var UploadedFile $file */
+            $file = $form->get('thumbnailFile')->getData();
+            $filename = $recipe->getId() . '.' . $file->getClientOriginalExtension();
+            $file->move($this->getParameter(), $filename);
+            $recipe->setThumbnail($filename);
+            dd($file->getClientOriginalName(), $file->getClientOriginalExtension());
+            // $em->flush();
+            $this->addFlash(
+                'success',
+                'La recette a bien été modifiée'
+            );
+            return $this->redirectToRoute('admin.recipe.index');
+        }
+
+        return $this->render('admin/recipe/edit.html.twig', [
+            'recipe' => $recipe,
+            'formTitle' => 'Editer : ' . $recipe->getTitle(),
+            'form' => $form
+        ]);
+    }
+```
+
+Pour obtenir le chemin du dossier public on va pouvoir accéder à des paramètres qui concernent le framework et ces paramètres sont accessibles depuis le controleur grâce à la méthode getParameter().
+
+> [!TIPS]
+> Si on ne connait pas le nom d'un paramètre et qu'on a besoin de débugguer on utilisera dans le terminal la commande :
+> ```shell
+> php bin/console debug:container --parameters
+> ```
+> ça nous donnera les alias et les valeurs qui sont associées
+
+```shell
+$ php bin/console debug:container --parameters
+
+Symfony Container Parameters
+============================
+
+ ------------------------------------------------------------- --------------------------------------------------------------------------     
+  Parameter                                                     Value
+ ------------------------------------------------------------- --------------------------------------------------------------------------     
+  asset.request_context.base_path                               null
+  asset.request_context.secure                                  null
+  cache.prefix.seed                                             _C:\wamp64\www\tuto_symfony.App_KernelDevDebugContainer
+  console.command.ids                                           []
+  data_collector.templates                                      {"data_collector.request":["request","@WebProfiler\/Collecto...
+  debug.container.dump                                          C:\wamp64\www\tuto_symfony\var\cache\dev/App_KernelDevDebugContainer.xml      
+  debug.error_handler.throw_at                                  -1
+  debug.file_link_format                                        %env(default::SYMFONY_IDE)%
+  doctrine.class                                                Doctrine\Bundle\DoctrineBundle\Registry
+  doctrine.connections                                          {"default":"doctrine.dbal.default_connection"}
+  doctrine.data_collector.class                                 Doctrine\Bundle\DoctrineBundle\DataCollector\DoctrineDataCollector
+  doctrine.dbal.configuration.class                             Doctrine\DBAL\Configuration
+  doctrine.dbal.connection.event_manager.class                  Symfony\Bridge\Doctrine\ContainerAwareEventManager
+  doctrine.dbal.connection_factory.class                        Doctrine\Bundle\DoctrineBundle\ConnectionFactory
+  doctrine.dbal.connection_factory.types                        []
+  doctrine.dbal.events.mysql_session_init.class                 Doctrine\DBAL\Event\Listeners\MysqlSessionInit
+  doctrine.dbal.events.oracle_session_init.class                Doctrine\DBAL\Event\Listeners\OracleSessionInit
+  doctrine.default_connection                                   default
+  doctrine.default_entity_manager                               default
+  doctrine.entity_managers                                      {"default":"doctrine.orm.default_entity_manager"}
+  doctrine.migrations.preferred_connection                      null
+  doctrine.migrations.preferred_em                              null
+  doctrine.orm.auto_generate_proxy_classes                      true
+  doctrine.orm.cache.apc.class                                  Doctrine\Common\Cache\ApcCache
+  doctrine.orm.cache.array.class                                Doctrine\Common\Cache\ArrayCache
+  doctrine.orm.cache.memcache.class                             Doctrine\Common\Cache\MemcacheCache
+  doctrine.orm.cache.memcache_host                              localhost
+  doctrine.orm.cache.memcache_instance.class                    Memcache
+  doctrine.orm.cache.memcache_port                              11211
+  doctrine.orm.cache.memcached.class                            Doctrine\Common\Cache\MemcachedCache
+  doctrine.orm.cache.memcached_host                             localhost
+  doctrine.orm.cache.memcached_instance.class                   Memcached
+  doctrine.orm.cache.memcached_port                             11211
+  doctrine.orm.cache.redis.class                                Doctrine\Common\Cache\RedisCache
+  doctrine.orm.cache.redis_host                                 localhost
+  doctrine.orm.cache.redis_instance.class                       Redis
+  doctrine.orm.cache.redis_port                                 6379
+  doctrine.orm.cache.wincache.class                             Doctrine\Common\Cache\WinCacheCache
+  doctrine.orm.cache.xcache.class                               Doctrine\Common\Cache\XcacheCache
+  doctrine.orm.cache.zenddata.class                             Doctrine\Common\Cache\ZendDataCache
+  doctrine.orm.configuration.class                              Doctrine\ORM\Configuration
+  doctrine.orm.enable_lazy_ghost_objects                        true
+  doctrine.orm.entity_listener_resolver.class                   Doctrine\Bundle\DoctrineBundle\Mapping\ContainerEntityListenerResolver        
+  doctrine.orm.entity_manager.class                             Doctrine\ORM\EntityManager
+  doctrine.orm.listeners.attach_entity_listeners.class          Doctrine\ORM\Tools\AttachEntityListenersListener
+  doctrine.orm.listeners.resolve_target_entity.class            Doctrine\ORM\Tools\ResolveTargetEntityListener
+  doctrine.orm.manager_configurator.class                       Doctrine\Bundle\DoctrineBundle\ManagerConfigurator
+  doctrine.orm.metadata.annotation.class                        Doctrine\ORM\Mapping\Driver\AnnotationDriver
+  doctrine.orm.metadata.attribute.class                         Doctrine\ORM\Mapping\Driver\AttributeDriver
+  doctrine.orm.metadata.driver_chain.class                      Doctrine\Persistence\Mapping\Driver\MappingDriverChain
+  doctrine.orm.metadata.php.class                               Doctrine\ORM\Mapping\Driver\PHPDriver
+  doctrine.orm.metadata.staticphp.class                         Doctrine\ORM\Mapping\Driver\StaticPHPDriver
+  doctrine.orm.metadata.xml.class                               Doctrine\ORM\Mapping\Driver\SimplifiedXmlDriver
+  doctrine.orm.metadata.yml.class                               Doctrine\ORM\Mapping\Driver\SimplifiedYamlDriver
+  doctrine.orm.naming_strategy.default.class                    Doctrine\ORM\Mapping\DefaultNamingStrategy
+  doctrine.orm.naming_strategy.underscore.class                 Doctrine\ORM\Mapping\UnderscoreNamingStrategy
+  doctrine.orm.proxy_cache_warmer.class                         Symfony\Bridge\Doctrine\CacheWarmer\ProxyCacheWarmer
+  doctrine.orm.proxy_dir                                        C:\wamp64\www\tuto_symfony\var\cache\dev/doctrine/orm/Proxies
+  doctrine.orm.proxy_namespace                                  Proxies
+  doctrine.orm.quote_strategy.ansi.class                        Doctrine\ORM\Mapping\AnsiQuoteStrategy
+  doctrine.orm.quote_strategy.default.class                     Doctrine\ORM\Mapping\DefaultQuoteStrategy
+  doctrine.orm.second_level_cache.cache_configuration.class     Doctrine\ORM\Cache\CacheConfiguration
+  doctrine.orm.second_level_cache.default_cache_factory.class   Doctrine\ORM\Cache\DefaultCacheFactory
+  doctrine.orm.second_level_cache.default_region.class          Doctrine\ORM\Cache\Region\DefaultRegion
+  doctrine.orm.second_level_cache.filelock_region.class         Doctrine\ORM\Cache\Region\FileLockRegion
+  doctrine.orm.second_level_cache.logger_chain.class            Doctrine\ORM\Cache\Logging\CacheLoggerChain
+  doctrine.orm.second_level_cache.logger_statistics.class       Doctrine\ORM\Cache\Logging\StatisticsCacheLogger
+  doctrine.orm.second_level_cache.regions_configuration.class   Doctrine\ORM\Cache\RegionsConfiguration
+  doctrine.orm.security.user.provider.class                     Symfony\Bridge\Doctrine\Security\User\EntityUserProvider
+  doctrine.orm.validator.unique.class                           Symfony\Bridge\Doctrine\Validator\Constraints\UniqueEntityValidator
+  doctrine.orm.validator_initializer.class                      Symfony\Bridge\Doctrine\Validator\DoctrineInitializer
+  env(VAR_DUMPER_SERVER)                                        127.0.0.1:9912
+  event_dispatcher.event_aliases                                {"Symfony\\Component\\Console\\Event\\ConsoleCommandEvent":"...
+  form.type_extension.csrf.enabled                              true
+  form.type_extension.csrf.field_name                           _token
+  form.type_guesser.doctrine.class                              Symfony\Bridge\Doctrine\Form\DoctrineOrmTypeGuesser
+  fragment.path                                                 /_fragment
+  fragment.renderer.hinclude.global_template                    null
+  kernel.build_dir                                              C:\wamp64\www\tuto_symfony\var\cache\dev
+  kernel.bundles                                                {"FrameworkBundle":"Symfony\\Bundle\\FrameworkBundle\\Framew...
+  kernel.bundles_metadata                                       {"FrameworkBundle":{"path":"C:\\wamp64\\www\\tuto_symfony\\v...
+  kernel.cache_dir                                              C:\wamp64\www\tuto_symfony\var\cache\dev
+  kernel.charset                                                UTF-8
+  kernel.container_class                                        App_KernelDevDebugContainer
+  kernel.debug                                                  true
+  kernel.default_locale                                         en
+  kernel.enabled_locales                                        []
+  kernel.environment                                            dev
+  kernel.error_controller                                       error_controller
+  kernel.http_method_override                                   true
+  kernel.logs_dir                                               C:\wamp64\www\tuto_symfony\var\log
+  kernel.project_dir                                            C:\wamp64\www\tuto_symfony
+  kernel.runtime_environment                                    %env(default:kernel.environment:APP_RUNTIME_ENV)%
+  kernel.runtime_mode                                           %env(query_string:default:container.runtime_mode:APP_RUNTIME_MODE)%
+  kernel.runtime_mode.cli                                       %env(not:default:kernel.runtime_mode.web:)%
+  kernel.runtime_mode.web                                       %env(bool:default::key:web:default:kernel.runtime_mode:)%
+  kernel.runtime_mode.worker                                    %env(bool:default::key:worker:default:kernel.runtime_mode:)%
+  kernel.secret                                                 %env(APP_SECRET)%
+  kernel.trust_x_sendfile_type_header                           false
+  kernel.trusted_hosts                                          []
+  monolog.handlers_to_channels                                  {"monolog.handler.console":{"type":"exclusive","elements":["...
+  monolog.swift_mailer.handlers                                 []
+  monolog.use_microseconds                                      true
+  profiler.storage.dsn                                          file:C:\wamp64\www\tuto_symfony\var\cache\dev/profiler
+  profiler_listener.only_exceptions                             false
+  profiler_listener.only_main_requests                          false
+  request_listener.http_port                                    80
+  request_listener.https_port                                   443
+  router.cache_dir                                              C:\wamp64\www\tuto_symfony\var\cache\dev
+  router.request_context.base_url
+  router.request_context.host                                   localhost
+  router.request_context.scheme                                 http
+  router.resource                                               kernel::loadRoutes
+  security.access.denied_url                                    null
+  security.authentication.hide_user_not_found                   true
+  security.authentication.manager.erase_credentials             true
+  security.authentication.session_strategy.strategy             migrate
+  security.firewalls                                            ["dev","main"]
+  security.logout_uris                                          []
+  security.role_hierarchy.roles                                 []
+  serializer.mapping.cache.file                                 C:\wamp64\www\tuto_symfony\var\cache\dev/serialization.php
+  session.metadata.storage_key                                  _sf2_meta
+  session.metadata.update_threshold                             0
+  session.save_path                                             null
+  session.storage.options                                       {"cache_limiter":"0","cookie_secure":"auto","cookie_httponly...
+  translator.default_path                                       C:\wamp64\www\tuto_symfony/translations
+  translator.logging                                            false
+  twig.default_path                                             C:\wamp64\www\tuto_symfony/templates
+  twig.form.resources                                           ["form_div_layout.html.twig","bootstrap_5_layout.html.twig"]
+  validator.mapping.cache.file                                  C:\wamp64\www\tuto_symfony\var\cache\dev/validation.php
+  validator.translation_domain                                  validators
+  web_profiler.debug_toolbar.intercept_redirects                false
+  web_profiler.debug_toolbar.mode                               2
+ ------------------------------------------------------------- --------------------------------------------------------------------------     
+
+
+ // To search for a specific parameter, re-run this command with a search term. (e.g. debug:container
+ // --parameter=kernel.debug)
+```
+
+> [!WARNING]
+> grep ne fonctionnera pas sous Windows, il faudra utiliser l'alternative `Select-String` dans Powershell
+
+Ne fonctionne pas sous windows :
+```shell
+php bin/console debug:container --parameters | grep dir
+```
+
+La commande `Select-String` qui est l'équivalent de `grep` dans Unix
+Pour contourner ce problème ouvrez un powershell est tapez la commande suivante :
+```shell
+php bin/console debug:container --parameters | Select-String "dir"
+```
+
+Celui qui nous interessera sera le `kernel.project_dir`.
+
+Pour tester `dd($this->getParameter('kernel.project_dir'));`
+```
+RecipeController.php on line 63:
+"C:\wamp64\www\tuto_symfony"
+```
+
+On aura pas besoin de créer le dossier car la fonction `move()` si elle ne trouve pas le dossier va automatiquement le créer.
+```php
+$file->move($this->getParameter('kernel.project_dir') . '/public/recettes/images', $filename);
+```
+
+`RecipeController.php`
+```php
+    #[Route('/{id}', name: 'edit', methods: ['GET', 'POST'], requirements: ['id' => Requirement::DIGITS])]
+    public function edit(Recipe $recipe, Request $request, EntityManagerInterface $em)
+    {
+        $form = $this->createForm(RecipeType::class, $recipe);
+        $form->handleRequest($request);
+
+        if ($form->isSubmitted() && $form->isValid()) {
+            /** @var UploadedFile $file */
+            $file = $form->get('thumbnailFile')->getData();
+            $filename = $recipe->getId() . '.' . $file->getClientOriginalExtension();
+            $file->move($this->getParameter('kernel.project_dir') . '/public/recettes/images', $filename);
+            $recipe->setThumbnail($filename);
+            $em->flush();
+            $this->addFlash(
+                'success',
+                'La recette a bien été modifiée'
+            );
+            return $this->redirectToRoute('admin.recipe.index');
+        }
+
+        return $this->render('admin/recipe/edit.html.twig', [
+            'recipe' => $recipe,
+            'formTitle' => 'Editer : ' . $recipe->getTitle(),
+            'form' => $form
+        ]);
+    }
+```
+
+Maintenant il va falloir gérer :
+- quand on envoit une nouvelle image il supprime l'ancienne
+- quand je supprime une recette, il supprime l'image associé.
