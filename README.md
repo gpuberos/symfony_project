@@ -4994,9 +4994,512 @@ Donc si l'on souhaite protéger une action dans un de nos contrôleurs on peut l
     #[Route('/', name: 'index')]
     public function index(): Response
     {
+        $this->denyAccessUnlessGranted('ROLE_USER');
         $recipes = $this->repository->findWithDurationLowerThan(20);
         return $this->render('admin/recipe/index.html.twig', [
             'recipes' => $recipes
         ]);
     }
 ```
+
+`$this->denyAccessUnlessGranted()`
+
+Cette méthode prend en paramètre une permission 'ROLE_USER' et si l'utilisateur n'a pas le bon rôle automatiquement cette méthode va renvoyer une exception qui va être capturé par le framework Symfony.
+
+Si on retourne sur la partie index de mes ressources, je n'y ai pas accès. On a une erreur de type access denied exception.
+
+`http://localhost:8000/admin/recettes/`
+
+#### Mise en place du système d'authentification
+
+La commande suivante va nous permettre de mettre en place le système d'authentification :
+
+```shell
+$ php bin/console make:auth
+```
+Quel style d'authentification on souhaite mettre en place : 1 (un formulaire de login)
+```shell
+ What style of authentication do you want? [Empty authenticator]:
+  [0] Empty authenticator
+  [1] Login form authenticator
+ > 1
+1
+```
+On choisit le nom de la class qui servira d'authenticator : AppAuthenticator
+```shell
+ The class name of the authenticator to create (e.g. AppCustomAuthenticator):
+ > AppAuthenticator
+```
+Il crée un controleur qui choisit les routes de connexion et deconnexion : On laisse le nom par défaut
+```shell
+ Choose a name for the controller class (e.g. SecurityController) [SecurityController]:
+ >
+```
+
+Est ce que l'on veut générer l'URL de déconnexion : yes
+```shell
+ Do you want to generate a '/logout' URL? (yes/no) [yes]:
+ >
+```
+Est ce qu'on veut une option se souvenir de moi : yes
+```shell
+ Do you want to support remember me? (yes/no) [yes]:
+ >
+```
+Et on indira que l'utilisateur devra cocher l'option pour l'activer : 0
+```shell
+ How should remember me be activated? [Activate when the user checks a box]:
+  [0] Activate when the user checks a box
+  [1] Always activate remember me
+ > 0
+0
+```
+
+```shell
+ created: src/Security/AppAuthenticator.php
+ updated: config/packages/security.yaml
+ created: src/Controller/SecurityController.php
+ created: templates/security/login.html.twig
+
+ 
+  Success! 
+ 
+
+ Next:
+ - Customize your new authenticator.
+ - Finish the redirect "TODO" in the App\Security\AppAuthenticator::onAuthenticationSuccess() method.
+ - Review & adapt the login template: templates/security/login.html.twig.
+```
+
+Il a généré un fichier template:
+
+`templates/security/login.html.twig`
+```php
+{% extends 'base.html.twig' %}
+
+{% block title %}Log in!{% endblock %}
+
+{% block body %}
+<form method="post">
+    {% if error %}
+        <div class="alert alert-danger">{{ error.messageKey|trans(error.messageData, 'security') }}</div>
+    {% endif %}
+
+    {% if app.user %}
+        <div class="mb-3">
+            You are logged in as {{ app.user.userIdentifier }}, <a href="{{ path('app_logout') }}">Logout</a>
+        </div>
+    {% endif %}
+
+    <h1 class="h3 mb-3 font-weight-normal">Please sign in</h1>
+    <label for="inputUsername">Username</label>
+    <input type="text" value="{{ last_username }}" name="username" id="inputUsername" class="form-control" autocomplete="username" required autofocus>
+    <label for="inputPassword">Password</label>
+    <input type="password" name="password" id="inputPassword" class="form-control" autocomplete="current-password" required>
+
+    <input type="hidden" name="_csrf_token"
+           value="{{ csrf_token('authenticate') }}"
+    >
+
+    <div class="checkbox mb-3">
+        <label>
+            <input type="checkbox" name="_remember_me"> Remember me
+        </label>
+    </div>
+
+    <button class="btn btn-lg btn-primary" type="submit">
+        Sign in
+    </button>
+</form>
+{% endblock %}
+```
+
+Lorsqu'on teste, il nous redirige vers `http://localhost:8000/login` et on a une erreur, c'est parce que le lien vers Recettes n'existe plus il faudra modifier le fichier `base.html.twig` et le supprimer.
+
+`base.html.twig`
+```php
+<li class="nav-item">
+    <a class="nav-link {{ app.current_route starts with 'recipe.' ? 'active' : '' }}" href="{{ path('recipe.index') }}">Recettes</a>
+</li>
+```
+
+Avant de faire le migration on va ajouter un nouveau champ email dans l'entité User
+```shell
+$ php bin/console make:entity User
+ Your entity already exists! So let's add some new fields!
+
+ New property name (press <return> to stop adding fields):
+ > email
+
+ Field type (enter ? to see all types) [string]:
+ >
+
+
+ Field length [255]:
+ >
+
+ Can this field be null in the database (nullable) (yes/no) [no]:
+ >
+
+ updated: src/Entity/User.php
+
+ Add another property? Enter the property name (or press <return> to stop adding fields):
+ >
+
+
+ 
+  Success! 
+ 
+
+ Next: When you're ready, create a migration with php bin/console make:migration
+```
+On génère notre migration
+```shell
+$ php bin/console make:migration
+ created: migrations/Version20240318140237.php
+
+ 
+  Success! 
+ 
+
+ Review the new migration then run it with php bin/console doctrine:migrations:migrate
+ See https://symfony.com/doc/current/bundles/DoctrineMigrationsBundle/index.html
+```
+```shell
+$ php bin/console doctrine:migrations:migrate
+
+ WARNING! You are about to execute a migration in database "db_cook" that could result in schema changes and data loss. Are you sure you wish 
+to continue? (yes/no) [yes]:
+ >
+
+[notice] Migrating up to DoctrineMigrations\Version20240318140237
+[notice] finished in 112.5ms, used 24M memory, 1 migrations executed, 1 sql queries
+                                                                                                                        
+ [OK] Successfully migrated to version: DoctrineMigrations\Version20240318140237                                        
+```
+
+#### Création d'un utilisateur via le controleur
+
+On va créer un utilisateur
+
+```shell
+$ php bin/console debug:autowiring Password
+
+Autowirable Types
+=================
+
+ The following classes & interfaces can be used as type-hints when autowiring:
+ (only showing classes/interfaces matching Password)
+
+ PasswordHasherFactoryInterface to support different password hashers for different user accounts.
+ Symfony\Component\PasswordHasher\Hasher\PasswordHasherFactoryInterface - alias:security.password_hasher_factory
+
+ Interface for the user password hasher service.
+ Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface - alias:security.user_password_hasher
+```
+
+On doit injecter `UserPasswordHasherInterface $hasher` et le container va se charger d'envoyer les bonnes choses et on va utiliser la méthode `setPassword($hasher->hashPassword($user, 'pass')`
+hashPassword() : attend en premier paramètre un objet de type User qui doit implémenter la `PasswordAuthenticatedUserInterface` et en second paramètre on doit mettre le mot de passe. Et ça générera une version hashé.
+
+`HomeController.php`
+```php
+namespace App\Controller;
+
+use App\Entity\User;
+use Doctrine\ORM\EntityManagerInterface;
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\PasswordHasher\Hasher\UserPasswordHasherInterface;
+use Symfony\Component\Routing\Attribute\Route;
+
+
+class HomeController extends AbstractController
+{
+    #[Route("/", name: "home",)]
+    function index(Request $request, EntityManagerInterface $em, UserPasswordHasherInterface $hasher): Response
+    {
+        $user = new User();
+        $user->setEmail('john@doe.fr')
+            ->setUsername('JohnDoe')
+            ->setPassword($hasher->hashPassword($user, 'pass'))
+            ->setRoles([]);
+        $em->persist($user);
+        $em->flush();
+        return $this->render('home/index.html.twig');
+    }
+}
+```
+
+On retourne sur la page d'accueil http://localhost:8000/ pour créer l'utilisateur. Une fois que c'est fait on supprime le code de création d'utilisateur dans `HomeController.php`.
+
+http://localhost:8000/admin/recettes nous redirige vers http://localhost:8000/login, on s'authentifie et automatiquement on a accès à recettes dans admin.
+
+
+#### Analyse de la class `Security\AppAuthenticator.php`
+
+`src\Security\AppAuthenticator.php` : La classe `AppAuthenticator` va étendre d'un `AbstractLoginFormAuthenticator`
+
+Un Authenticator `AbstractLoginFormAuthenticator` doit impémenter cette interface `AuthenticatorInterface` :
+
+1. Méthode `supports(Request $request)` qui prendra en paramètre une requête et renverra un booléen qui dira si oui ou bon la requête va être géré par notre Authenticator.
+
+`vendor\symfony\security-http\Authenticator\AuthenticatorInterface.php`
+```php
+public function supports(Request $request): ?bool;
+```
+Si on est dans une méthode POST et qu'on est sur l'url de connexion dans se cas là je dois m'activer
+`vendor\symfony\security-http\Authenticator\AbstractLoginFormAuthenticator.php`
+```php
+$request->isMethod('POST') && $this->getLoginUrl($request) === $request->getBaseUrl().$request->getPathInfo()
+```
+
+2. Méthode `authenticate(Request $request)` : elle va prendre en paramètre une requête `Request` et doit renvoyer un `Passport` qui est un objet particulier du composant sécurité. Cette méthode se déclenche automatiquement si on a répondu oui à la partie `supports`
+`vendor\symfony\security-http\Authenticator\AuthenticatorInterface.php`
+```php
+public function authenticate(Request $request): Passport;
+```
+3. On va récupérer dans notre requête le champ `'username'`
+`src\Security\AppAuthenticator.php`
+```php
+$username = $request->request->get('username', '');
+``` 
+4. On va sauvegarder en session le nom d'utilisateur que l'utilisateur a saisi
+`src\Security\AppAuthenticator.php`
+```php
+$request->getSession()->set(SecurityRequestAttributes::LAST_USERNAME, $username);
+```
+5. Il va créer un `passport`.
+`src\Security\AppAuthenticator.php`
+```php
+return new Passport(
+            new UserBadge($username),
+            new PasswordCredentials($request->request->get('password', '')),
+            [
+                new CsrfTokenBadge('authenticate', $request->request->get('_csrf_token')),
+                new RememberMeBadge(),
+            ]
+        );
+```
+6. Sur ce `passport` il va passer un premier paramètre `UserBadge` (c'est une sorte de tampon qui contient l'information de l'utilisateur)
+```php
+new UserBadge($username)
+```
+7. Il met un autre tampon qui est un `PasswordCredentials`, il va lui passer en paramètre le mot de passe, lorsque ce passport sera récupéré et sera vérifié par le composant sécurité, il va regarder dans la base données le mot de passe hashé valide le mot de passe qui a été saisi.
+```php
+new PasswordCredentials($request->request->get('password', '')),
+```
+8. Il met un tampon qui dit qu'il va falloir valider `CsrfTokenBadge`
+```php
+new CsrfTokenBadge('authenticate', $request->request->get('_csrf_token')),
+```
+9. Et un autre tampon qui dit qu'il faut s'en souvenir en créant un cookie pour le connecter automatiquement
+```php
+new RememberMeBadge(),
+```
+10. Ensuite le composant sécurité va regarder le `Passport` et il y a 2 situations possibles : 
+- soit ça fonctionne et dans ce cas là il va utiliser la fonction `onAuthenticationSuccess()`
+`src\Security\AppAuthenticator.php`
+```php
+    public function onAuthenticationSuccess(Request $request, TokenInterface $token, string $firewallName): ?Response
+    {
+        if ($targetPath = $this->getTargetPath($request->getSession(), $firewallName)) {
+            return new RedirectResponse($targetPath);
+        }
+
+        return new RedirectResponse('/');
+    }
+```
+- soit ça échoué et il va utiliser `onAuthenticationFailure()` et il redirige vers la partie login.
+`vendor\symfony\security-http\Authenticator\AbstractLoginFormAuthenticator.php`
+```php
+    public function onAuthenticationFailure(Request $request, AuthenticationException $exception): Response
+    {
+        if ($request->hasSession()) {
+            $request->getSession()->set(SecurityRequestAttributes::AUTHENTICATION_ERROR, $exception);
+        }
+
+        $url = $this->getLoginUrl($request);
+
+        return new RedirectResponse($url);
+    }
+```
+
+Si ça fonctionne il redirigera l'utilisateur vers la page qu'il essayait de consulter avant de se connecter.
+`src\Security\AppAuthenticator.php`
+```php
+        if ($targetPath = $this->getTargetPath($request->getSession(), $firewallName)) {
+            return new RedirectResponse($targetPath);
+        }
+        // Si l'utilisateur n'a pas de chemin cible, qu'il est directement arrivé par la page de login
+        return new RedirectResponse('/');
+    }
+```
+Au niveau du Authenticator on voit qui a injecté un service `UrlGeneratorInterface` qui permet de générer des URL. `vendor\symfony\routing\Generator\UrlGeneratorInterface.php`.
+```php
+ public function __construct(private UrlGeneratorInterface $urlGenerator)
+    {
+    }
+```
+On pourrait utiliser `urlGenerator` pour rediriger vers la partie admin des recettes
+```php
+return new RedirectResponse($this->urlGenerator->generate('admin.recipe.index'));
+```
+
+`createToken` prend en paramètre un `Passport` et le nom du pare-feu qui a été utilisé et ça doit renvoyer quelque chose de type `TokenInterface`
+`vendor\symfony\security-http\Authenticator\AuthenticatorInterface.php`
+```php
+createToken(Passport $passport, string $firewallName): TokenInterface
+```
+Le `AbstractLoginFormAuthenticator` étend `AbstractAuthenticator` qui crée un token qui contient notre utilisateur, le nom du pare-feu et ses différents roles.
+`vendor\symfony\security-http\Authenticator\AbstractAuthenticator.php`
+```php
+abstract class AbstractAuthenticator implements AuthenticatorInterface
+{
+    /**
+     * Shortcut to create a PostAuthenticationToken for you, if you don't really
+     * care about which authenticated token you're using.
+     */
+    public function createToken(Passport $passport, string $firewallName): TokenInterface
+    {
+        return new PostAuthenticationToken($passport->getUser(), $firewallName, $passport->getUser()->getRoles());
+    }
+}
+```
+
+Le `AbstractLoginFormAuthenticator` va implémenter `AuthenticationEntryPointInterface`. C'est une interface qui va contenir qu'une seule méthode `start()` qui permet d'indiquer comment on doit démarrer l'authentification.
+
+Elle récupère l'URL de login, elle redirige l'utilisateur. C'est que qui permet de faire en sorte que quand l'utilisateur a une erreur d'authentification il soit redirigé dynamiquement vers la page de login.
+
+`vendor\symfony\security-http\EntryPoint\AuthenticationEntryPointInterface.php`
+```php
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\Security\Core\Exception\AuthenticationException;
+
+/**
+ * Implement this interface for any classes that will be called to "start"
+ * the authentication process (see method for more details).
+ *
+ * @author Fabien Potencier <fabien@symfony.com>
+ */
+interface AuthenticationEntryPointInterface
+{
+    /**
+     * Returns a response that directs the user to authenticate.
+     *
+     * This is called when an anonymous request accesses a resource that
+     * requires authentication. The job of this method is to return some
+     * response that "helps" the user start into the authentication process.
+     *
+     * Examples:
+     *
+     * - For a form login, you might redirect to the login page
+     *
+     *     return new RedirectResponse('/login');
+     *
+     * - For an API token authentication system, you return a 401 response
+     *
+     *     return new Response('Auth header required', 401);
+     */
+    public function start(Request $request, ?AuthenticationException $authException = null): Response;
+}
+```
+
+`src\Controller\SecurityController.php`
+```php
+namespace App\Controller;
+
+use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
+use Symfony\Component\HttpFoundation\Response;
+use Symfony\Component\Routing\Attribute\Route;
+use Symfony\Component\Security\Http\Authentication\AuthenticationUtils;
+
+class SecurityController extends AbstractController
+{
+    #[Route(path: '/login', name: 'app_login')]
+    public function login(AuthenticationUtils $authenticationUtils): Response
+    {
+        // if ($this->getUser()) {
+        //     return $this->redirectToRoute('target_path');
+        // }
+
+        // get the login error if there is one
+        $error = $authenticationUtils->getLastAuthenticationError();
+        // last username entered by the user
+        $lastUsername = $authenticationUtils->getLastUsername();
+
+        return $this->render('security/login.html.twig', ['last_username' => $lastUsername, 'error' => $error]);
+    }
+
+    #[Route(path: '/logout', name: 'app_logout')]
+    public function logout(): void
+    {
+        throw new \LogicException('This method can be blank - it will be intercepted by the logout key on your firewall.');
+    }
+}
+
+```
+
+On a une route qui s'appelle `app_login`. C'est cette route qui est résolu lorsque l'authenticator demande est ce que je peux avoir l'URL de connexion. Il récupère un service qui s'appelle `AuthenticationUtils` et dans ce service là il récupère l'erreur si on a une erreur d'authentification il récupère le dernier nom d'utilisateur qui a été rentré et il envoit tout ça à la vue.
+
+Pour la partie logout il n'a mis aucune logique à l'intérieur cette action ne sera jamais appelée et c'est le système de sécurité qui va intercepter les choses.
+
+`templates\security\login.html.twig`
+```php
+{% extends 'base.html.twig' %}
+
+{% block title %}Log in!
+{% endblock %}
+
+{% block body %}
+    <form method="post">
+        {% if error %}
+            <div class="alert alert-danger">{{ error.messageKey|trans(error.messageData, 'security') }}</div>
+        {% endif %}
+
+        {% if app.user %}
+            <div class="mb-3">
+                You are logged in as
+                {{ app.user.userIdentifier }},
+                <a href="{{ path('app_logout') }}">Logout</a>
+            </div>
+        {% endif %}
+
+        <h1 class="h3 mb-3 font-weight-normal">Please sign in</h1>
+        <label for="inputUsername">Username</label>
+        <input type="text" value="{{ last_username }}" name="username" id="inputUsername" class="form-control" autocomplete="username" required autofocus>
+        <label for="inputPassword">Password</label>
+        <input type="password" name="password" id="inputPassword" class="form-control" autocomplete="current-password" required>
+
+        <input type="hidden" name="_csrf_token" value="{{ csrf_token('authenticate') }}">
+
+        <div class="checkbox mb-3">
+            <label>
+                <input type="checkbox" name="_remember_me">
+                Remember me
+            </label>
+        </div>
+
+        <button class="btn btn-lg btn-primary" type="submit">
+            Sign in
+        </button>
+    </form>
+{% endblock %}
+
+```
+
+S'il y a une erreur il nous l'affiche `{{ error.messageKey|trans(error.messageData, 'security') }}`.
+Il est capable de récupérer l'utilisateur actuellement authentifié grâce à la propriété `user` qui se situe sur `app`.
+Sur `app` il récupère le `userIdentifier` pour l'afficher.
+```php
+{% if app.user %}
+    <div class="mb-3">
+        You are logged in as
+        {{ app.user.userIdentifier }},
+        <a href="{{ path('app_logout') }}">Logout</a>
+    </div>
+{% endif %}
+```
+
+Pour la partie connexion c'est un formulaire classique. il rajoute un champ caché `hidden` qui permet d'avoir un `_csrf_token`. C'est ce token là qui va être validé lorsque dans notre `AppAuthenticator` on lui passe ce badge là on voit que la clé est la même.
