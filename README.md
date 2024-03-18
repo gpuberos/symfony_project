@@ -4745,3 +4745,258 @@ On utilisera également une librairie tier pour faire le redimensionnement à la
 Source :
 - Glide : https://github.com/bumptech/glide
 - Tutoriel Redimensionnez vos images avec Glide : https://grafikart.fr/tutoriels/image-resize-glide-php-1358
+
+## Composant sécurité
+
+Création de l'entité utilisateur :
+
+```shell
+$ php bin/console make:user
+
+ The name of the security user class (e.g. User) [User]:
+ >
+```
+On laisse par défaut User
+
+```shell
+ Do you want to store user data in the database (via Doctrine)? (yes/no) [yes]:
+ >
+```
+Est ce qu'on veut sauvegarder les utilisateurs en base de données on répond yes
+
+```shell
+ Enter a property name that will be the unique "display" name for the user (e.g. email, username, uuid) [email]:
+ > username
+```
+On choisit la propriété qui sert de nom d'affichage pour l'utilisateur
+On ne va pas mettre email ici mais on va choisir d'avoir un champ username en plus.
+
+```shell
+ Will this app need to hash/check user passwords? Choose No if passwords are not needed or will be checked/hashed by some other system (e.g. a
+ single sign-on server).
+
+ Does this app need to hash/check user passwords? (yes/no) [yes]:
+ >
+```
+Il demande si on a besoin de hacher et de vérifier les  mots de passe, on répond yes
+
+```shell
+ created: src/Entity/User.php
+ created: src/Repository/UserRepository.php
+ updated: src/Entity/User.php
+ updated: config/packages/security.yaml
+
+ 
+  Success! 
+ 
+
+ Next Steps:
+   - Review your new App\Entity\User class.
+   - Use make:entity to add more fields to your User entity and then run make:migration.
+   - Create a way to authenticate! See https://symfony.com/doc/current/security.html
+```
+
+### User Entity
+
+Il vient de créer l'entité. cette entité à un champ `id`, `username`, `roles` et `password`. Elle implémente plusieurs Interface. 
+
+**UserInterface** : cette interface permet de représenter un utilisateur, à l'intérieur de cette interface on a `getRoles()` qui renvoit un tableau de rôle lié à l'utilisateur et on a `getUserIdentifier()` qui va permettre de représenter notre utilisateur, ça peut être soit le `username` soit `email`. On a choisit `username` ce qui fait que dans mon entité `User` il a bien crée cette méthode `getUserIdentifier` et il renvoit par défaut le `username`.
+
+`src/Entity/User.php`
+```php
+namespace App\Entity;
+
+use App\Repository\UserRepository;
+use Doctrine\ORM\Mapping as ORM;
+use Symfony\Component\Security\Core\User\PasswordAuthenticatedUserInterface;
+use Symfony\Component\Security\Core\User\UserInterface;
+
+#[ORM\Entity(repositoryClass: UserRepository::class)]
+#[ORM\UniqueConstraint(name: 'UNIQ_IDENTIFIER_USERNAME', fields: ['username'])]
+class User implements UserInterface, PasswordAuthenticatedUserInterface
+{
+    #[ORM\Id]
+    #[ORM\GeneratedValue]
+    #[ORM\Column]
+    private ?int $id = null;
+
+    #[ORM\Column(length: 180)]
+    private ?string $username = null;
+
+    /**
+     * @var list<string> The user roles
+     */
+    #[ORM\Column]
+    private array $roles = [];
+
+    /**
+     * @var string The hashed password
+     */
+    #[ORM\Column]
+    private ?string $password = null;
+```
+
+Dans la partie `roles` on a par défaut un tableau vide et il insère le `ROLE_USER`
+```php
+    public function getRoles(): array
+    {
+        $roles = $this->roles;
+        // guarantee every user at least has ROLE_USER
+        $roles[] = 'ROLE_USER';
+
+        return array_unique($roles);
+    }
+```
+
+Il rajoute `PasswordAuthenticatedUserInterface` qui permet d'indiquer que l'utilisateur va s'authentifier avec un mot de passe. Cette méthode attend qu'un GET Password qui doit renvoyer le mot de passe.
+
+### User Repository
+
+**Il a crée le repository associé :**
+
+Il a rajouté une méthode `upgradePassword` qui permet de rehasher le mot de passe.
+
+`src/Repository/UserRepository.php`
+```php
+namespace App\Repository;
+
+use App\Entity\User;
+use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
+use Doctrine\Persistence\ManagerRegistry;
+use Symfony\Component\Security\Core\Exception\UnsupportedUserException;
+use Symfony\Component\Security\Core\User\PasswordAuthenticatedUserInterface;
+use Symfony\Component\Security\Core\User\PasswordUpgraderInterface;
+
+/**
+ * @extends ServiceEntityRepository<User>
+ *
+ * @method User|null find($id, $lockMode = null, $lockVersion = null)
+ * @method User|null findOneBy(array $criteria, array $orderBy = null)
+ * @method User[]    findAll()
+ * @method User[]    findBy(array $criteria, array $orderBy = null, $limit = null, $offset = null)
+ */
+class UserRepository extends ServiceEntityRepository implements PasswordUpgraderInterface
+{
+    public function __construct(ManagerRegistry $registry)
+    {
+        parent::__construct($registry, User::class);
+    }
+
+    /**
+     * Used to upgrade (rehash) the user's password automatically over time.
+     */
+    public function upgradePassword(PasswordAuthenticatedUserInterface $user, string $newHashedPassword): void
+    {
+        if (!$user instanceof User) {
+            throw new UnsupportedUserException(sprintf('Instances of "%s" are not supported.', $user::class));
+        }
+
+        $user->setPassword($newHashedPassword);
+        $this->getEntityManager()->persist($user);
+        $this->getEntityManager()->flush();
+    }
+
+    //    /**
+    //     * @return User[] Returns an array of User objects
+    //     */
+    //    public function findByExampleField($value): array
+    //    {
+    //        return $this->createQueryBuilder('u')
+    //            ->andWhere('u.exampleField = :val')
+    //            ->setParameter('val', $value)
+    //            ->orderBy('u.id', 'ASC')
+    //            ->setMaxResults(10)
+    //            ->getQuery()
+    //            ->getResult()
+    //        ;
+    //    }
+
+    //    public function findOneBySomeField($value): ?User
+    //    {
+    //        return $this->createQueryBuilder('u')
+    //            ->andWhere('u.exampleField = :val')
+    //            ->setParameter('val', $value)
+    //            ->getQuery()
+    //            ->getOneOrNullResult()
+    //        ;
+    //    }
+}
+
+```
+
+### Fichier de configuration `security.yaml`
+
+Il a généré un fichier `security.yaml` qui définit la configuration de notre composant sécurité.
+
+On a une clé `password_hashers` qui va définir les classes à utiliser pour hasher les mots de passes en fonction de la classe ciblée.
+
+Donc ici `PasswordAuthenticatedUserInterface: 'auto'` il sait que toutes les classes qui vont implémenter cette interface là vont utiliser le hasher automatique.
+
+On a le  `providers` qui permet d'expliquer comment récupérer des utilisateurs. Il utilise le système de provider `entity` et ça va lui dire c'est la class `App\Entity\User` qui va représenter un utilisateur et la propriété a utiliser est le `username`.
+
+Dans la partie `firewalls` de `dev` qui permet de désactiver le pare-feu pour les ressources du profiler. Et ensuite on a un pare-feu principal `main` qui est en mode `lazy` ça veut dire qu'il ne va pas se charger par défaut tant qu'on accède pas à l'utilisateur. Et pour récupérer l'utilisateur il utilisera le provier `app_user_provider`
+
+`config/packages/security.yaml`
+```php
+security:
+    # https://symfony.com/doc/current/security.html#registering-the-user-hashing-passwords
+    password_hashers:
+        Symfony\Component\Security\Core\User\PasswordAuthenticatedUserInterface: 'auto'
+    # https://symfony.com/doc/current/security.html#loading-the-user-the-user-provider
+    providers:
+        # used to reload user from session & other features (e.g. switch_user)
+        app_user_provider:
+            entity:
+                class: App\Entity\User
+                property: username
+    firewalls:
+        dev:
+            pattern: ^/(_(profiler|wdt)|css|images|js)/
+            security: false
+        main:
+            lazy: true
+            provider: app_user_provider
+
+            # activate different ways to authenticate
+            # https://symfony.com/doc/current/security.html#the-firewall
+
+            # https://symfony.com/doc/current/security/impersonating_user.html
+            # switch_user: true
+
+    # Easy way to control access for large sections of your site
+    # Note: Only the *first* access control that matches will be used
+    access_control:
+        # - { path: ^/admin, roles: ROLE_ADMIN }
+        # - { path: ^/profile, roles: ROLE_USER }
+
+when@test:
+    security:
+        password_hashers:
+            # By default, password hashers are resource intensive and take time. This is
+            # important to generate secure password hashes. In tests however, secure hashes
+            # are not important, waste resources and increase test times. The following
+            # reduces the work factor to the lowest possible values.
+            Symfony\Component\Security\Core\User\PasswordAuthenticatedUserInterface:
+                algorithm: auto
+                cost: 4 # Lowest possible value for bcrypt
+                time_cost: 3 # Lowest possible value for argon
+                memory_cost: 10 # Lowest possible value for argon
+
+```
+
+Donc si l'on souhaite protéger une action dans un de nos contrôleurs on peut le faire grâce à la méthode qui est disponible au niveau du `AbstractController`.
+
+### Limitation de l'accès à cette action
+
+`RecipeController.php`
+```php
+
+    #[Route('/', name: 'index')]
+    public function index(): Response
+    {
+        $recipes = $this->repository->findWithDurationLowerThan(20);
+        return $this->render('admin/recipe/index.html.twig', [
+            'recipes' => $recipes
+        ]);
+    }
+```
