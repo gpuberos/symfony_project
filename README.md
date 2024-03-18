@@ -135,6 +135,9 @@ php bin/console make:migration
 # Exécute les migrations après la création du système d'authentification
 php bin/console doctrine:migrations:migrate
 
+# Crée un formulaire d'inscription
+php bin/console make:registration-form
+
 # Affiche les services liés au mot de passe qui peuvent être injectés
 php bin/console debug:autowiring Password
 
