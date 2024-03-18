@@ -47,6 +47,18 @@ Ouvrir dans le navigateur `http://localhost:8025/` pour accéder à l'interface 
 - `findAll()` : permettra de récupérer tous les enregistrements 
 - `findOneBy()` : permettra de récupérer un enregistrement en fonction d'un critère en particulier
 
+## File Upload
+
+**VichUploaderBundle**
+
+Pour gérer plus facilement le système d'envoi de fichier il est possible d'utiliser le bundle VichUploaderBundle qui permet d'attacher automatiquement un système d'upload de fichier aux évènements de notre entité.
+
+Source : 
+- https://github.com/dustin10/VichUploaderBundle
+
+Documentation :
+- Getting started with VichUploaderBundle : https://github.com/dustin10/VichUploaderBundle/blob/master/docs/index.md
+
 ## Commandes Symfony
 
 ```shell
@@ -63,7 +75,6 @@ php bin/console make:controller NameController
 
 # Affiche toutes les routes définies dans l'application
 php bin/console debug:router
-
 
 
 # -------------------------------------------
