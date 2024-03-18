@@ -4318,6 +4318,430 @@ $file->move($this->getParameter('kernel.project_dir') . '/public/recettes/images
     }
 ```
 
+On édite notre gabarit Twig Edit pour afficher l'image.
+
+`templates\admin\recipe\edit.html.twig`
+```php
+{% extends 'admin/admin.html.twig' %}
+
+
+{% block title "Recette : " ~ recipe.title %}
+
+{% block body %}
+
+    <h1>{{ recipe.title }}</h1>
+
+    <p>
+        <img src="/recettes/images/{{ recipe.thumbnail }}" alt="">
+    </p>
+
+    {{ form(form) }}
+
+{% endblock %}
+
+```
+
+### Librairie VichUploaderBundle
+
 Maintenant il va falloir gérer :
 - quand on envoit une nouvelle image il supprime l'ancienne
 - quand je supprime une recette, il supprime l'image associé.
+
+Pour gérer plus facilement le système d'envoi de fichier il est possible d'utiliser le bundle VichUploaderBundle qui permet d'attacher automatiquement un système d'upload de fichier aux évènements de notre entité.
+
+Source : 
+- https://github.com/dustin10/VichUploaderBundle
+
+Documentation :
+- Installation VichUploaderBundle : https://github.com/dustin10/VichUploaderBundle/blob/master/docs/installation.md
+
+On installe notre libraire :
+```shell
+$ composer require vich/uploader-bundle
+./composer.json has been updated
+Running composer update vich/uploader-bundle
+Loading composer repositories with package information
+Restricting packages listed in "symfony/symfony" to "7.0.*"
+Updating dependencies
+Lock file operations: 2 installs, 0 updates, 0 removals
+  - Locking jms/metadata (2.8.0)
+  - Locking vich/uploader-bundle (2.3.1)
+Writing lock file
+Installing dependencies from lock file (including require-dev)
+Package operations: 2 installs, 0 updates, 0 removals
+  - Downloading jms/metadata (2.8.0)
+  - Downloading vich/uploader-bundle (2.3.1)
+  - Installing jms/metadata (2.8.0): Extracting archive
+  - Installing vich/uploader-bundle (2.3.1): Extracting archive
+Package sebastian/resource-operations is abandoned, you should avoid using it. No replacement was suggested.
+Generating autoload files
+112 packages you are using are looking for funding.
+Use the `composer fund` command to find out more!
+
+Symfony operations: 1 recipe (9282b64cec84ff3eda90ef4a7ab5ac4f)
+  -  WARNING  vich/uploader-bundle (>=1.13): From github.com/symfony/recipes-contrib:main
+    The recipe for this package comes from the "contrib" repository, which is open to community contributions.
+    Review the recipe at https://github.com/symfony/recipes-contrib/tree/main/vich/uploader-bundle/1.13
+
+    Do you want to execute this recipe?
+    [y] Yes
+    [n] No
+    [a] Yes for all packages, only for the current installation session
+    [p] Yes permanently, never ask again for this project
+    (defaults to n): y
+
+- Configuring vich/uploader-bundle (>=1.13): From github.com/symfony/recipes-contrib:main
+Executing script cache:clear [OK]
+Executing script assets:install public [OK]
+Executing script importmap:install [OK]
+              
+ What's next? 
+              
+
+Some files have been created and/or updated to configure your new packages.
+Please review, edit and commit them: these files are yours.
+
+No security vulnerability advisories found.
+Using version ^2.3 for vich/uploader-bundle
+
+```
+
+Sur une installation classique de Symfony on quelque chose qui s'active qui s'appelle Symfony Flex qui va être capable de détecter certains package et c'est le cas dans notre installation et il va venir rajouter un comportement pour configurer ce paquet là.
+
+Donc il nous demande si l'on souhaite exécuter cette recette, on répond Yes
+Cette recette va modifier notre site pour rajouter des comportements et éviter qu'on ait à faire les choses.
+
+On peut voir que dans `config\bundles.php` il a ajouter automatiquement une ligne de configuration. Et il a également créer un fichier `config\packages\vich_uploader.yaml` pour gérer la configuration de VichUploader.
+
+`config\bundles.php`
+```php
+Vich\UploaderBundle\VichUploaderBundle::class => ['all' => true],
+```
+
+`config\packages\vich_uploader.yaml`
+```yaml
+vich_uploader:
+    db_driver: orm
+
+    #mappings:
+    #    products:
+    #        uri_prefix: /images/products
+    #        upload_destination: '%kernel.project_dir%/public/images/products'
+    #        namer: Vich\UploaderBundle\Naming\SmartUniqueNamer
+
+```
+
+On va définir un mapping. Un mapping va permettre de créer un alias pour expliquer comment on va gérer les fichiers
+
+```yaml
+vich_uploader:
+    db_driver: orm
+
+    mappings:
+        recipes:
+            uri_prefix: /images/recipes
+            upload_destination: '%kernel.project_dir%/public/images/recipes'
+            namer: Vich\UploaderBundle\Naming\SmartUniqueNamer
+
+```
+
+On configure le préfixe de l'uri, et le répertoire d'upload (destination).
+On définit un `namer`, un namer est une classe qui va avoir comme responsabilité de nommer un fichier (On gardera celui par défaut).
+
+Documentation :
+- configure an upload mapping : https://github.com/dustin10/VichUploaderBundle/blob/master/docs/usage.md
+
+Si on regarde à quoi ressemble cette classe, elle implémente la NamerInterface qui a une seule méthode.
+Cette méthode va recevoir l'objet `object $object`, elle va recevoir les informations sur le mapping `PropertyMapping $mapping` et son objectif va être de générer le nom du fichier.
+
+```php
+public function name(object $object, PropertyMapping $mapping): string
+```
+
+`vendor\vich\uploader-bundle\src\Naming\SmartUniqueNamer.php`
+```php
+namespace Vich\UploaderBundle\Naming;
+
+use Vich\UploaderBundle\Mapping\PropertyMapping;
+use Vich\UploaderBundle\Util\Transliterator;
+
+/**
+ * This namer makes filename unique by appending a uniqid.
+ * Also, filename is made web-friendly by transliteration.
+ *
+ * @author Massimiliano Arione <garakkio@gmail.com>
+ */
+final class SmartUniqueNamer implements NamerInterface
+{
+    public function __construct(private readonly Transliterator $transliterator)
+    {
+    }
+
+    public function name(object $object, PropertyMapping $mapping): string
+    {
+        $file = $mapping->getFile($object);
+        $originalName = $file->getClientOriginalName();
+        $originalName = $this->transliterator->transliterate($originalName);
+        $originalExtension = \strtolower(\pathinfo($originalName, \PATHINFO_EXTENSION));
+        $originalBasename = \pathinfo($originalName, \PATHINFO_FILENAME);
+        $uniqId = \str_replace('.', '', \uniqid('-', true));
+        $uniqExtension = \sprintf('%s.%s', $uniqId, $originalExtension);
+        $smartName = \sprintf('%s%s', $originalBasename, $uniqExtension);
+
+        // Check if smartName is an acceptable size (some filesystems accept a max of 255)
+        if (\strlen($smartName) <= 255) {
+            return $smartName;
+        }
+
+        // Check if the unique extension will fit into 255
+        // 254 to account for a one letter basename
+        if (\strlen($uniqExtension) <= 254) {
+            // Resize the basename to fit into 255 alongside the unique ID and extension
+            $shrinkBasenameSize = 255 - \strlen($uniqExtension);
+            $shortBasename = \substr($originalBasename, 0, $shrinkBasenameSize);
+
+            return \sprintf('%s%s', $shortBasename, $uniqExtension);
+        }
+
+        // The extension is too long, but first try to preserve the basename, if possible
+        // 253 is used to account for a dot and one letter extension
+        $uniqBasename = \sprintf('%s%s', $originalBasename, $uniqId);
+        if (\strlen($uniqBasename) <= 253) {
+            // Resize the extension to fit into 255 alongside the basename, unique ID, and the dot
+            // 254 is used to account for the dot
+            $shrinkExtensionSize = 254 - \strlen($uniqBasename);
+            $shortExtension = \substr($originalExtension, 0, $shrinkExtensionSize);
+
+            return \sprintf('%s.%s', $uniqBasename, $shortExtension);
+        }
+
+        // Both the basename and extension are too long
+        // 251 is used to account for a dot and 3 letter extension
+        $shrinkBasenameSize = 251 - \strlen($uniqId);
+        $shortBasename = \substr($originalBasename, 0, $shrinkBasenameSize);
+        $shortExtension = \substr($originalExtension, 0, 3);
+
+        return \sprintf('%s%s.%s', $shortBasename, $uniqId, $shortExtension);
+    }
+}
+```
+
+Maintenant qu'on a le mapping on va pouvoir expliquer dans notre entité qu'on veut pouvoir uploader quelque chose.
+On va crée une nouvelle propriété qui va représenter un fichier, on la met à côté de thumbnail.
+
+La propriété sera privée `private`, sera nullable `?` et qui sera de type fichier `File`, celle qui nous intéresse c'est File qui se trouve dans le namespace HttpFoundation.
+On va générer les getters et setters, et au niveau du setter on va le mettre fluent `static`, c'est à dire qu'il va retourner une instance de l'objet
+
+On va lui dire lorsqu'on modifie ce thumbnail file j'aimerais que tu gères l'upload de fichier et que tu mettes le nom de fichier dans la propriété thumbnail. Pour cela on va utiliser un attribut au niveau de notre entité `#[Vich\Uploadable()]` qui dira que cette classe va contenir des fichiers qui peuvent être uploadés.
+
+Ensuite sur la propriété qui contient le fichier, on va ajouter UploadableField. Au niveau de ce constructeur on a de nombreux paramètres : 
+
+`#[Vich\UploadableField(mapping: 'recipes', fileNameProperty: 'thumbnail', size: 'imageSize')]`
+
+1. mapping : il devra correspondre à celui de notre fichier de config `config\packages\vich_uploader.yaml`
+2. fileNameProperty : quand il va sauvegarder le fichier il va récupérer les informations sur le fichier qui a été envoyé (la version renommée) et il lui indique dans qu'elle propriété il va devoir sauvegarder le nom du fichier. Donc on va lui spécifier que ce sera dans la propriété `thumbnail`
+3. size : si l'on souhaite un champ qui sauvegarde la taille du fichier et mettre le chemin d'un autre élément qui contiendra la taille du fichier (on ne le mettra pas car on en a pas).
+
+`Entity\Recipe.php`
+```php
+use Symfony\Component\HttpFoundation\File\File;
+use Vich\UploaderBundle\Mapping\Annotation as Vich;
+
+#[ORM\Entity(repositoryClass: RecipeRepository::class)]
+#[UniqueEntity('title')]
+#[UniqueEntity('slug')]
+#[Vich\Uploadable()]
+
+class Recipe
+{
+    #[Vich\UploadableField(mapping: 'recipes', fileNameProperty: 'thumbnail')]
+    #[Assert\Image()]
+    private ?File $thumbnailFile = null;
+
+    public function getThumbnailFile(): ?File
+    {
+        return $this->thumbnailFile;
+    }
+
+    public function setThumbnailFile(?File $thumbnailFile): static
+    {
+        $this->thumbnailFile = $thumbnailFile;
+
+        return $this;
+    }
+}
+```
+
+On va modifier notre formulaire 
+
+On supprime `mapped` car le champ existe bien dans mon entité et la contrainte 'constraints' on la mettra au niveau de notre entité Recipe `#[Assert\Image()]`.
+
+`Form\RecipeType.php`
+```php
+->add('thumbnailFile', FileType::class, [
+    'mapped' => false,
+    'constraints' => [
+        new Image()
+    ]
+])
+```
+On aura
+
+```php
+->add('thumbnailFile', FileType::class)
+```
+
+On va modifier notre contrôleur pour supprimer toute la logique personnalisée qu'on avait crée
+
+`RecipeController.php`
+```php
+    #[Route('/{id}', name: 'edit', methods: ['GET', 'POST'], requirements: ['id' => Requirement::DIGITS])]
+    public function edit(Recipe $recipe, Request $request, EntityManagerInterface $em)
+    {
+        $form = $this->createForm(RecipeType::class, $recipe);
+        $form->handleRequest($request);
+
+        if ($form->isSubmitted() && $form->isValid()) {
+            /** @var UploadedFile $file */
+            $file = $form->get('thumbnailFile')->getData();
+            $filename = $recipe->getId() . '.' . $file->getClientOriginalExtension();
+            $file->move($this->getParameter('kernel.project_dir') . '/public/recettes/images', $filename);
+            $recipe->setThumbnail($filename);
+            $em->flush();
+            $this->addFlash(
+                'success',
+                'La recette a bien été modifiée'
+            );
+            return $this->redirectToRoute('admin.recipe.index');
+        }
+
+```
+Deviendra :
+
+```php
+    #[Route('/{id}', name: 'edit', methods: ['GET', 'POST'], requirements: ['id' => Requirement::DIGITS])]
+    public function edit(Recipe $recipe, Request $request, EntityManagerInterface $em)
+    {
+        $form = $this->createForm(RecipeType::class, $recipe);
+        $form->handleRequest($request);
+
+        if ($form->isSubmitted() && $form->isValid()) {
+            $em->flush();
+            $this->addFlash(
+                'success',
+                'La recette a bien été modifiée'
+            );
+            return $this->redirectToRoute('admin.recipe.index');
+        }
+```
+
+Et on supprimera dans :
+`templates\recipe\edit.html.twig`
+
+```php
+    <p>
+        <img src="/recettes/images/{{ recipe.thumbnail }}" alt="">
+    </p>
+```
+
+On va récupérer l'image dans notre gabarit Twig (vue)
+
+On va utiliser le helper `vich_uploader_asset(recipe, 'thumbnailFile')`. En premier paramètre l'entité qu'on souhaite récupérer `recipe`, et en second paramètre le nom du champ sur lequel on a mis l'uploadedFile `thumbnailFile`.
+
+Dès qu'on voudra récupérer le chemin de notre image uploadé grâce au bundle VichUploader c'est ce helper qu'on va utiliser `<img src="{{ vich_uploader_asset(recipe, 'thumbnailFile') }}" alt="">`.
+
+`templates\recipe\edit.html.twig`
+```php
+{% extends 'admin/admin.html.twig' %}
+
+
+{% block title "Recette : " ~ recipe.title %}
+
+{% block body %}
+
+    <h1>{{ recipe.title }}</h1>
+
+    <img src="{{ vich_uploader_asset(recipe, 'thumbnailFile') }}" alt="">
+
+    {{ form(form) }}
+
+{% endblock %}
+
+```
+
+Si l'on souhaite récupérer le chemin du fichier depuis un controleur `RecipeController.php`, on a un helper qu'on peut injecter.
+Au niveau de `edit` on va injecter le service qui correspond `UploaderHelper`. Et si on souhaite récupérer le chemin on utilisera la méthode asset(), qui prendra en premier paramètre l'objet `$recipe` et en second paramètre la propriété qui contient l'attribut `'thumbnailFile'`. Et automatiquement il nous donnera le chemin absolu vers le fichier
+
+`RecipeController.php`
+```php
+use Vich\UploaderBundle\Templating\Helper\UploaderHelper;
+```
+```php
+#[Route('/{id}', name: 'edit', methods: ['GET', 'POST'], requirements: ['id' => Requirement::DIGITS])]
+    public function edit(Recipe $recipe, Request $request, EntityManagerInterface $em, UploaderHelper $helper)
+    {
+
+        dd($helper->asset($recipe, 'thumbnailFile'));
+
+        $form = $this->createForm(RecipeType::class, $recipe);
+        $form->handleRequest($request);
+
+        if ($form->isSubmitted() && $form->isValid()) {
+            $em->flush();
+            $this->addFlash(
+                'success',
+                'La recette a bien été modifiée'
+            );
+            return $this->redirectToRoute('admin.recipe.index');
+        }
+
+        return $this->render('admin/recipe/edit.html.twig', [
+            'recipe' => $recipe,
+            'formTitle' => 'Editer : ' . $recipe->getTitle(),
+            'form' => $form
+        ]);
+    }
+```
+
+Résultat du `dd($helper->asset($recipe, 'thumbnailFile'));`
+```
+RecipeController.php on line 56:
+"/images/recipes/barbe-a-papa-pink-65f8248a83f18989587393.jpg"
+```
+
+#### Remarque
+
+**Upload de fichier**
+
+Le système d'upload de fichier ne se déclenche que si au moment du `flush()` vous avez une modification de l'entité, donc si on envoit qu'une image et on ne change aucun autre champ, il n'y aura pas de modification de l'entité et donc le `flush()` ne sauvegardera pas en base de données et VichUploader ne sera pas en mesure de rajouter son comportement. Dans notre cas on a pas eu besoin de la faire parce que même si on ne modifie que le fichier vu qu'on a les événements de post submit, on modifie nous même le UpdatedTime.
+
+```php
+   public function setImageFile(?File $imageFile = null): void
+    {
+        $this->imageFile = $imageFile;
+
+        if (null !== $imageFile) {
+            // It is required that at least one field changes if you are using doctrine
+            // otherwise the event listeners won't be called and the file is lost
+            $this->updatedAt = new \DateTimeImmutable();
+        }
+    }
+```
+
+**Système de fichier**
+
+Symfony dispose du système de fichier qui va permettre d'interagir avec notre système et on a vu que sur le type UploadedFile on avait une fonction `move()`, le problème c'est que ces fonctions sont basées sur un système de fichier local, si on souhaite utilisé un service tier comme Amazon S3 ce système là ne va pas servir il faudra passer par une librairie tier.
+
+VichUploaderBundle le gère (voir Storage Related). Les plus connu sont Gaufrette et Flysystem qui font des abstactions, donc on a une seule Interface et on peut brancher derrière n'importe quel système de stockage.
+
+Documentation
+- Filesystem Component : https://symfony.com/doc/current/components/filesystem.html
+- Storage Related : https://github.com/dustin10/VichUploaderBundle/blob/master/docs/index.md#storage-related
+
+**Système de redimensionnement d'image**
+
+On utilisera également une librairie tier pour faire le redimensionnement à la volée.
+
+Source :
+- Glide : https://github.com/bumptech/glide
+- Tutoriel Redimensionnez vos images avec Glide : https://grafikart.fr/tutoriels/image-resize-glide-php-1358
