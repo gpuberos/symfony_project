@@ -17,16 +17,17 @@ use Symfony\Component\Security\Http\Attribute\IsGranted;
 #[IsGranted('ROLE_ADMIN')]
 class RecipeController extends AbstractController
 {
-    public function __construct(private RecipeRepository $repository)
-    {
-    }
-
     #[Route('/', name: 'index')]
-    public function index(): Response
+    public function index(RecipeRepository $repository, Request $request): Response
     {
-        $recipes = $this->repository->findWithDurationLowerThan(20);
+        $page = $request->query->getInt('page', 1);
+        $limit = 1;
+        $recipes = $repository->paginateRecipes($page, $limit);
+        $maxPage = ceil($recipes->count() / $limit);
         return $this->render('admin/recipe/index.html.twig', [
-            'recipes' => $recipes
+            'recipes' => $recipes,
+            'maxPage' => $maxPage,
+            'page' => $page
         ]);
     }
 
