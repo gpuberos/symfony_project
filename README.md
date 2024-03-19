@@ -157,6 +157,7 @@ php bin/console debug:container --parameters
 ### Autres commandes Symfony à retenir :
 
 - `php bin/console list` : Affiche la liste de toutes les commandes disponibles.
+- `php bin/console debug:config` : Affiche la configuration actuelle de l'application, elle affichera une liste de bundles et les paramètres associés à ces bundles.
 - `php bin/console cache:clear` : Efface le cache, supprime tous les fichiers en cache et améliore les performances de l'application.
 - `php bin/console assets:install` : Installe les ressources web du bundle sous un répertoire public.
 - `php bin/console doctrine:fixtures:load` : Charge les données de test dans la base de données.
