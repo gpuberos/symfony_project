@@ -5,6 +5,7 @@ namespace App\Repository;
 use App\Entity\Category;
 use Doctrine\Bundle\DoctrineBundle\Repository\ServiceEntityRepository;
 use Doctrine\Persistence\ManagerRegistry;
+// use Symfony\Config\Doctrine\Orm\EntityManagerConfig\DqlConfig;
 
 /**
  * @extends ServiceEntityRepository<Category>
@@ -26,6 +27,16 @@ class CategoryRepository extends ServiceEntityRepository
      */
     public function findAllWithCount(): array
     {
+        // DQL : createQuery
+        // Activer : use Symfony\Config\Doctrine\Orm\EntityManagerConfig\DqlConfig;
+        // return $this->getEntityManager()->createQuery(<<<DQL
+        // SELECT NEW App\\DTO\\CategoryWithCountDTO(c.id, c.name, COUNT(c.id))
+        // FROM App\Entity\Category c
+        // LEFT JOIN c.recipes r
+        // GROUP BY c.id
+        // DQL)->getResult();
+
+        // createQueryBuilder
         return $this->createQueryBuilder('c')
             ->select('NEW App\\DTO\\CategoryWithCountDTO(c.id, c.name, COUNT(c.id))')
             ->leftJoin('c.recipes', 'r')
