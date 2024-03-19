@@ -14,6 +14,7 @@ use Symfony\Component\Routing\Requirement\Requirement;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 #[Route('/admin/recettes', name: 'admin.recipe.')]
+#[IsGranted('ROLE_ADMIN')]
 class RecipeController extends AbstractController
 {
     public function __construct(private RecipeRepository $repository)
@@ -21,7 +22,6 @@ class RecipeController extends AbstractController
     }
 
     #[Route('/', name: 'index')]
-    #[IsGranted('ROLE_USER')]
     public function index(): Response
     {
         $recipes = $this->repository->findWithDurationLowerThan(20);
