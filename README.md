@@ -9,11 +9,22 @@ composer require webapp
 ```
 ## Lancement du serveur PHP en local depuis terminal
 
-Pour lancer le serveur
 ```shell
+# --------------------------------------------------
+# Pour démarrer le serveur dans Visual Studio Code
+# --------------------------------------------------
 php -S localhost:8000 -t public
-```
 
+# --------------------------------------------------
+# Pour démarrer le serveur Symfony
+# --------------------------------------------------
+symfony server:start
+
+# --------------------------------------------------
+# Pour arrêter le serveur Symfony
+# --------------------------------------------------
+symfony server:stop
+```
 ## Lancement d'adminer
 
 http://localhost:8000/adminer.php
