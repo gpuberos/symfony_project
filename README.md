@@ -141,6 +141,12 @@ php bin/console make:registration-form
 # Affiche les services liés au mot de passe qui peuvent être injectés
 php bin/console debug:autowiring Password
 
+# -------------------------------------------
+# Gestion des assets de l'application
+# -------------------------------------------
+
+# Exécute la commande pour versionner et rendre publics les assets de l'application
+php bin/console asset-map:compile
 
 # -------------------------------------------
 # Debugging
