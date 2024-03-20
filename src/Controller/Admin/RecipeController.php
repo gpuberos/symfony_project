@@ -13,6 +13,7 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Attribute\Route;
 use Symfony\Component\Routing\Requirement\Requirement;
+use Symfony\Component\Security\Core\User\UserInterface;
 use Symfony\Component\Security\Http\Attribute\IsGranted;
 
 #[Route('/admin/recettes', name: 'admin.recipe.')]
@@ -24,9 +25,9 @@ class RecipeController extends AbstractController
     public function index(RecipeRepository $repository, Request $request, Security $security): Response
     {
         $page = $request->query->getInt('page', 1);
-        $userId = $security->getUser()->getId();
+        $user = $security->getUser()->getId();
         $canListAll = $security->isGranted(RecipeVoter::LIST_ALL);
-        $recipes = $repository->paginateRecipes($page, $canListAll ? null : $userId);
+        $recipes = $repository->paginateRecipes($page, $canListAll ? null : $user);
         return $this->render('admin/recipe/index.html.twig', [
             'recipes' => $recipes,
         ]);

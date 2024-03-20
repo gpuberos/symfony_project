@@ -42,15 +42,8 @@ class RecipeVoter extends Voter
             case self::EDIT:
                 return $subject->getUser()->getId() === $user->getId();
                 break;
-
             case self::VIEW:
-                return true;
-                break;
-            
             case self::LIST:
-                return true;
-                break;
-            
             case self::CREATE:
                 return true;
                 break;
