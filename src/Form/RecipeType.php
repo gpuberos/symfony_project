@@ -6,6 +6,7 @@ use App\Entity\Category;
 use App\Entity\Recipe;
 use Symfony\Bridge\Doctrine\Form\Type\EntityType;
 use Symfony\Component\Form\AbstractType;
+use Symfony\Component\Form\Extension\Core\Type\CollectionType;
 use Symfony\Component\Form\Extension\Core\Type\FileType;
 use Symfony\Component\Form\Extension\Core\Type\SubmitType;
 use Symfony\Component\Form\Extension\Core\Type\TextareaType;
@@ -38,6 +39,11 @@ class RecipeType extends AbstractType
             ])
             ->add('content', TextareaType::class, [
                 'empty_data' => ''
+            ])
+            ->add('quantities', CollectionType::class, [
+                'entry_type' => QuantityType::class,
+                'by_reference' => false,
+                'entry_options' => ['label' => false]
             ])
             ->add('duration')
             ->add('save', SubmitType::class, [

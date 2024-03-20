@@ -25,9 +25,9 @@ class RecipeController extends AbstractController
     public function index(RecipeRepository $repository, Request $request, Security $security): Response
     {
         $page = $request->query->getInt('page', 1);
-        $user = $security->getUser()->getId();
+        $userId = $security->getUser()->getId();
         $canListAll = $security->isGranted(RecipeVoter::LIST_ALL);
-        $recipes = $repository->paginateRecipes($page, $canListAll ? null : $user);
+        $recipes = $repository->paginateRecipes($page, $canListAll ? null : $userId);
         return $this->render('admin/recipe/index.html.twig', [
             'recipes' => $recipes,
         ]);
