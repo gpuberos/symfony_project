@@ -152,6 +152,7 @@ php bin/console make:registration-form
 # Affiche les services liés au mot de passe qui peuvent être injectés
 php bin/console debug:autowiring Password
 
+
 # -------------------------------------------
 # Gestion des assets de l'application
 # -------------------------------------------
@@ -159,15 +160,41 @@ php bin/console debug:autowiring Password
 # Exécute la commande pour versionner et rendre publics les assets de l'application
 php bin/console asset-map:compile
 
+
 # -------------------------------------------
 # Debugging
 # -------------------------------------------
 
-# Affiche tous les services qui peuvent être automatiquement injectés
+# Affiche tous les services qui peuvent être automatiquement injectés.
+# Utile pour comprendre quels services sont disponibles pour l'injection de dépendances.
 php bin/console debug:autowiring
 
-# Affiche tous les paramètres du conteneur de services
+# Affiche tous les paramètres du conteneur de services.
+# Utile pour voir les paramètres actuellement utilisés par l'application.
 php bin/console debug:container --parameters
+
+
+# -------------------------------------------
+# Réinitialiser la base de données
+# -------------------------------------------
+
+# Supprime la base de données. L'option --force est nécessaire pour confirmer cette action.
+php bin/console doctrine:database:drop --force
+
+# Crée une nouvelle base de données.
+php bin/console doctrine:database:create
+
+# Exécute les migrations, ce qui met à jour la base de données avec les dernières modifications du schéma.
+php bin/console doctrine:migrations:migrate
+
+
+# -----------------------------------------------------------
+# Installation runtime après récupération sur dépôt Github
+# -----------------------------------------------------------
+
+# Cette commande installe le composant "symfony/runtime" via Composer.
+# Ce composant fournit les fonctionnalités nécessaires pour exécuter les applications Symfony.
+composer require symfony/runtime
 
 ```
 
